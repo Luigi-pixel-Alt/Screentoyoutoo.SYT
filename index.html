@@ -8,17 +8,30 @@
 <style>
   body { font-family: sans-serif; background: #111; color: #eee; text-align: center; padding: 1rem; }
   video { width: 100%; max-width: 960px; background: #000; margin-top: 1rem; }
-  button { font-size: 1.1rem; padding: .6rem 1.2rem; }
-  input { font-size: 1rem; width: 80%; max-width: 500px; margin: .3rem 0; }
-  #painel { margin: 1rem auto; max-width: 500px; text-align: left; }
-  #painel .titulo { font-weight: bold; margin-bottom: .4rem; }
-  #painel .pessoa { padding: .3rem .6rem; background: #222; border-radius: 6px; margin: .25rem 0; }
+  button, .btn-arquivo { font-size: 1.1rem; padding: .6rem 1.2rem; }
+  .btn-arquivo { display: inline-block; background: #333; border-radius: 4px; cursor: pointer; font-size: .95rem; padding: .4rem .8rem; }
+  input[type=text], input:not([type]) { font-size: 1rem; width: 80%; max-width: 500px; margin: .3rem 0; }
+  select { font-size: 1rem; max-width: 100%; }
   small { color: #999; }
+
+  #painel, #config { margin: 1rem auto; max-width: 500px; text-align: left; }
+  #painel .titulo { font-weight: bold; margin-bottom: .4rem; }
+  .pessoa { display: flex; align-items: center; gap: .6rem; padding: .35rem .6rem; background: #222; border-radius: 6px; margin: .25rem 0; }
+  .avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex: none; }
+  .avatar.letra { background: #444; display: flex; align-items: center; justify-content: center; font-weight: bold; }
+  .pessoa .estado { font-size: .85rem; color: #aaa; }
+
+  #config summary { cursor: pointer; font-weight: bold; }
+  .cfg-linha { background: #222; border-radius: 6px; padding: .5rem .6rem; margin: .4rem 0; }
+  .cfg-linha > div:first-child { margin-bottom: .3rem; }
+  .cfg-linha button { font-size: .95rem; padding: .3rem .6rem; }
+  #preview .avatar { width: 80px; height: 80px; margin-bottom: .4rem; }
 </style>
 </head>
 <body>
 <h2>Transmissão de tela</h2>
 <div id="ui"></div>
+<div id="config"></div>
 <div id="painel"></div>
 <video id="v" autoplay playsinline controls></video>
 
@@ -28,11 +41,72 @@ const MAX_PESSOAS = 10;          // contando com quem transmite
 const BITRATE = 1500000;         // 1.5 Mbps por espectador (baixe se a sua internet for fraca)
 const INTERVALO_STATUS = 3000;   // espectador avisa o status a cada 3s
 const TEMPO_SEM_SINAL = 9000;    // se ficar 9s sem avisar, aparece "sem sinal"
+const TAMANHO_MAX_SOM = 1000000; // sons escolhidos do seu PC: máximo ~1 MB
+
+// Sons que estão no repositório (na mesma pasta do index.html).
+// Pra adicionar mais, suba o arquivo no GitHub e acrescente uma linha aqui.
+const SONS_PRONTOS = [
+  { nome: 'Ronaldo',         arquivo: 'ronaldo.mp3' },
+  { nome: 'Otkaz v dostupe', arquivo: 'otkaz-v-dostupe.mp3' },
+  { nome: 'Ne nazhimaetsia', arquivo: 'ne-nazhimaetsia.mp3' },
+  { nome: 'Access denied',   arquivo: 'access-denied_Is238Ly.mp3' },
+  { nome: 'Vybor rezhima',   arquivo: 'vybor-rezhima.mp3' },
+];
 
 const ui = document.getElementById('ui');
 const painel = document.getElementById('painel');
+const cfgBox = document.getElementById('config');
 const video = document.getElementById('v');
 const hostId = location.hash.slice(1); // se tiver #id na URL, é espectador
+
+// ===== FUNÇÕES AUXILIARES =====
+function lerSalvo(chave, padrao) {
+  try {
+    const v = JSON.parse(localStorage.getItem(chave));
+    return v ? Object.assign({}, padrao, v) : padrao;
+  } catch (e) { return padrao; }
+}
+function gravarSalvo(chave, valor) {
+  try { localStorage.setItem(chave, JSON.stringify(valor)); return true; }
+  catch (e) { return false; }
+}
+
+// foto: corta no centro, reduz pra 96x96 e vira um JPEG pequeno (~4 KB)
+function reduzirFoto(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const lado = Math.min(img.width, img.height);
+      const sx = (img.width - lado) / 2, sy = (img.height - lado) / 2;
+      const c = document.createElement('canvas');
+      c.width = c.height = 96;
+      c.getContext('2d').drawImage(img, sx, sy, lado, lado, 0, 0, 96, 96);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL('image/jpeg', 0.7));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('imagem inválida')); };
+    img.src = url;
+  });
+}
+
+// só aceita foto pequena em JPEG (quem transmite não confia em qualquer coisa que chega)
+function fotoValida(f) {
+  return typeof f === 'string' && f.length < 30000 && /^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/.test(f);
+}
+
+function criarAvatar(nome, foto) {
+  if (fotoValida(foto)) {
+    const img = document.createElement('img');
+    img.className = 'avatar';
+    img.src = foto;
+    return img;
+  }
+  const d = document.createElement('div');
+  d.className = 'avatar letra';
+  d.textContent = (nome || '?').trim().charAt(0).toUpperCase() || '?';
+  return d;
+}
 
 if (hostId) modoEspectador(); else modoTransmissor();
 
@@ -47,11 +121,25 @@ function modoTransmissor() {
     video.srcObject = stream;
     video.muted = true; // evita eco da sua própria transmissão
 
-    // som de aviso (criado aqui porque o clique libera o áudio do navegador)
+    // ----- sons -----
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     let somLigado = true;
+    let cfgAberto = false;
+
+    // fonte: 'bipe', 'p0'...'p4' (sons prontos) ou 'custom' (arquivo escolhido do PC)
+    const config = lerSalvo('syt-sons', {
+      entrou: { fonte: 'p0', custom: null },
+      saiu:   { fonte: 'p3', custom: null },
+      volume: 0.6
+    });
+
+    function salvarConfig() {
+      if (!gravarSalvo('syt-sons', config)) {
+        alert('Não deu pra salvar pra próxima vez (arquivo grande demais pro navegador), mas vale nesta sessão.');
+      }
+    }
+
     function beep(freq) {
-      if (!somLigado) return;
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
       osc.frequency.value = freq;
@@ -62,14 +150,138 @@ function modoTransmissor() {
       osc.stop(audioCtx.currentTime + 0.15);
     }
 
+    // toca o som configurado pro evento ('entrou' ou 'saiu'); forcar = ignora o "mudo" (botão de teste)
+    function tocar(ev, forcar) {
+      if (!somLigado && !forcar) return;
+      const reserva = ev === 'entrou' ? 880 : 440;
+      const c = config[ev];
+      let src = null;
+      if (c.fonte === 'custom' && c.custom) src = c.custom.data;
+      else if (/^p\d+$/.test(c.fonte) && SONS_PRONTOS[+c.fonte.slice(1)]) src = SONS_PRONTOS[+c.fonte.slice(1)].arquivo;
+      if (!src) { beep(reserva); return; }
+      const a = new Audio(src);
+      a.volume = config.volume;
+      a.play().catch(() => beep(reserva)); // se der erro (arquivo não encontrado etc.), toca o bipe
+    }
+
+    function escolherArquivo(ev, file) {
+      if (!file) return;
+      if (file.size > TAMANHO_MAX_SOM) {
+        alert('Arquivo grande demais (máximo ~1 MB). Use um som curto.');
+        return;
+      }
+      const r = new FileReader();
+      r.onload = () => {
+        config[ev].custom = { nome: file.name, data: r.result };
+        config[ev].fonte = 'custom';
+        salvarConfig();
+        desenharConfig();
+      };
+      r.readAsDataURL(file);
+    }
+
+    function desenharConfig() {
+      cfgBox.innerHTML = '';
+      const det = document.createElement('details');
+      det.open = cfgAberto;
+      det.ontoggle = () => { cfgAberto = det.open; };
+      const sum = document.createElement('summary');
+      sum.textContent = '⚙️ Configurar sons';
+      det.appendChild(sum);
+
+      [['entrou', 'Quando alguém entra'], ['saiu', 'Quando alguém sai']].forEach(([ev, rotulo]) => {
+        const linha = document.createElement('div');
+        linha.className = 'cfg-linha';
+        const lab = document.createElement('div');
+        lab.textContent = rotulo;
+
+        const sel = document.createElement('select');
+        const ops = [['bipe', '🔔 Bipe simples']];
+        SONS_PRONTOS.forEach((s, i) => ops.push(['p' + i, '🎵 ' + s.nome]));
+        if (config[ev].custom) ops.push(['custom', '📁 ' + config[ev].custom.nome]);
+        ops.forEach(([valor, texto]) => {
+          const o = document.createElement('option');
+          o.value = valor;
+          o.textContent = texto;
+          sel.appendChild(o);
+        });
+        sel.value = config[ev].fonte;
+        sel.onchange = () => { config[ev].fonte = sel.value; salvarConfig(); };
+
+        const arq = document.createElement('label');
+        arq.className = 'btn-arquivo';
+        arq.textContent = '📁 Escolher arquivo';
+        const inp = document.createElement('input');
+        inp.type = 'file';
+        inp.accept = 'audio/*';
+        inp.style.display = 'none';
+        inp.onchange = () => escolherArquivo(ev, inp.files[0]);
+        arq.appendChild(inp);
+
+        const teste = document.createElement('button');
+        teste.textContent = '▶ Testar';
+        teste.onclick = () => tocar(ev, true);
+
+        linha.append(lab, sel, document.createTextNode(' '), arq, document.createTextNode(' '), teste);
+        det.appendChild(linha);
+      });
+
+      const vl = document.createElement('div');
+      vl.className = 'cfg-linha';
+      vl.appendChild(document.createTextNode('Volume: '));
+      const rng = document.createElement('input');
+      rng.type = 'range';
+      rng.min = 0; rng.max = 100;
+      rng.value = Math.round(config.volume * 100);
+      rng.style.width = '60%';
+      rng.onchange = () => { config.volume = rng.value / 100; salvarConfig(); };
+      vl.appendChild(rng);
+      det.appendChild(vl);
+
+      const rest = document.createElement('button');
+      rest.textContent = 'Restaurar padrão';
+      rest.onclick = () => {
+        config.entrou = { fonte: 'p0', custom: null };
+        config.saiu = { fonte: 'p3', custom: null };
+        config.volume = 0.6;
+        salvarConfig();
+        desenharConfig();
+      };
+      det.appendChild(rest);
+
+      cfgBox.appendChild(det);
+    }
+
+    // ----- conexão -----
     const peer = new Peer();
-    const viewers = new Map(); // id -> { nome, visivel, tocando, ultimo }
+    const viewers = new Map(); // id -> { nome, foto, visivel, tocando, ultimo }
+    let timer;
+    let encerrado = false;
+
+    // encerra tudo: para de capturar a tela, desconecta os amigos e limpa a página
+    function parar() {
+      if (encerrado) return;
+      encerrado = true;
+      clearInterval(timer);
+      stream.getTracks().forEach(t => t.stop());
+      peer.destroy();
+      viewers.clear();
+      video.srcObject = null;
+      painel.innerHTML = '';
+      cfgBox.innerHTML = '';
+      ui.innerHTML = 'Transmissão encerrada.<br><button onclick="location.reload()">Começar de novo</button>';
+    }
+    // se você clicar em "Parar compartilhamento" na barra do navegador, também encerra
+    stream.getVideoTracks()[0].onended = parar;
 
     peer.on('open', id => {
       const link = location.href.split('#')[0] + '#' + id;
       ui.innerHTML = 'Mande este link pros amigos:<br><input readonly value="' + link + '">' +
-        '<br><label><input type="checkbox" id="som" checked style="width:auto"> Som de aviso quando alguém entrar/sair</label>';
+        '<br><label><input type="checkbox" id="som" checked style="width:auto"> Som de aviso quando alguém entrar/sair</label>' +
+        '<br><br><button id="parar">Parar transmissão</button>';
       document.getElementById('som').onchange = e => { somLigado = e.target.checked; };
+      document.getElementById('parar').onclick = parar;
+      desenharConfig();
     });
 
     // um espectador entrou: liga pra ele mandando a tela
@@ -82,7 +294,7 @@ function modoTransmissor() {
           setTimeout(() => conn.close(), 500);
           return;
         }
-        viewers.set(conn.peer, { nome: 'Alguém', visivel: true, tocando: false, ultimo: Date.now() });
+        viewers.set(conn.peer, { nome: 'Alguém', foto: null, visivel: true, tocando: false, ultimo: Date.now() });
         call = peer.call(conn.peer, stream);
         limitarBitrate(call);
         render();
@@ -94,7 +306,8 @@ function modoTransmissor() {
         v.ultimo = Date.now();
         if (d.tipo === 'oi') {
           v.nome = String(d.nome || 'Alguém').slice(0, 20);
-          beep(880); // agudo = entrou
+          v.foto = fotoValida(d.foto) ? d.foto : null;
+          tocar('entrou');
         } else if (d.tipo === 'status') {
           v.visivel = !!d.visivel;
           v.tocando = !!d.tocando;
@@ -103,7 +316,7 @@ function modoTransmissor() {
       });
 
       conn.on('close', () => {
-        if (viewers.delete(conn.peer)) beep(440); // grave = saiu
+        if (viewers.delete(conn.peer)) tocar('saiu');
         if (call) call.close();
         render();
       });
@@ -117,6 +330,7 @@ function modoTransmissor() {
     }
 
     function render() {
+      if (encerrado) return;
       painel.innerHTML = '';
       const t = document.createElement('div');
       t.className = 'titulo';
@@ -125,13 +339,20 @@ function modoTransmissor() {
       viewers.forEach(v => {
         const p = document.createElement('div');
         p.className = 'pessoa';
-        p.textContent = v.nome + ' — ' + estado(v); // textContent evita código malicioso nos nomes
+        const info = document.createElement('div');
+        const n = document.createElement('div');
+        n.textContent = v.nome; // textContent evita código malicioso nos nomes
+        const e = document.createElement('div');
+        e.className = 'estado';
+        e.textContent = estado(v);
+        info.append(n, e);
+        p.append(criarAvatar(v.nome, v.foto), info);
         painel.appendChild(p);
       });
     }
 
     render();
-    setInterval(render, 2000); // atualiza o "sem sinal" mesmo se ninguém mandar nada
+    timer = setInterval(render, 2000); // atualiza o "sem sinal" mesmo se ninguém mandar nada
   };
 }
 
@@ -150,20 +371,58 @@ function limitarBitrate(call) {
 
 // ===== QUEM ASSISTE =====
 function modoEspectador() {
-  ui.innerHTML = '<input id="nome" placeholder="Seu nome" maxlength="20"><br>' +
+  const perfil = lerSalvo('syt-perfil', { nome: '', foto: null });
+
+  ui.innerHTML = '<div id="preview"></div>' +
+    '<input id="nome" placeholder="Seu nome" maxlength="20"><br>' +
+    '<label class="btn-arquivo">📷 Escolher foto (opcional)<input type="file" id="foto" accept="image/*" style="display:none"></label><br><br>' +
     '<button id="join">Assistir</button><br>' +
-    '<small>Quem transmite vê se você está com a aba aberta e o vídeo rodando.</small>';
+    '<small>Quem transmite vê seu nome, sua foto e se você está com a aba aberta e o vídeo rodando.</small>';
+
+  const nomeEl = document.getElementById('nome');
+  const prev = document.getElementById('preview');
+  nomeEl.value = perfil.nome || '';
+
+  function mostrarPreview() {
+    prev.innerHTML = '';
+    if (fotoValida(perfil.foto)) prev.appendChild(criarAvatar('', perfil.foto));
+  }
+  mostrarPreview();
+
+  document.getElementById('foto').onchange = e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    reduzirFoto(f).then(d => { perfil.foto = d; mostrarPreview(); })
+                  .catch(() => alert('Não consegui abrir essa imagem.'));
+  };
 
   document.getElementById('join').onclick = () => {
-    const nome = document.getElementById('nome').value.trim() || 'Alguém';
+    const nome = nomeEl.value.trim() || 'Alguém';
+    perfil.nome = nome;
+    gravarSalvo('syt-perfil', perfil); // lembra nome e foto da próxima vez
+
     ui.textContent = 'Conectando...';
     const peer = new Peer();
+    let statusTimer;
+    let saiu = false;
+
+    // sai da transmissão: desconecta e mostra um botão pra entrar de novo
+    function sair(msg) {
+      if (saiu) return;
+      saiu = true;
+      clearInterval(statusTimer);
+      peer.destroy();
+      video.srcObject = null;
+      ui.innerHTML = msg + '<br><button onclick="location.reload()">Entrar de novo</button>';
+    }
 
     peer.on('call', call => {
       call.answer(); // não manda nada de volta, só recebe
       call.on('stream', s => {
+        if (saiu) return;
         video.srcObject = s;
-        ui.textContent = 'Assistindo!';
+        ui.innerHTML = 'Assistindo!<br><button id="sair">Sair</button>';
+        document.getElementById('sair').onclick = () => sair('Você saiu.');
       });
     });
 
@@ -171,9 +430,10 @@ function modoEspectador() {
       const conn = peer.connect(hostId);
 
       conn.on('open', () => {
-        conn.send({ tipo: 'oi', nome: nome });
+        conn.send({ tipo: 'oi', nome: nome, foto: fotoValida(perfil.foto) ? perfil.foto : null });
 
         function enviarStatus() {
+          if (saiu || !conn.open) return;
           conn.send({
             tipo: 'status',
             visivel: !document.hidden,
@@ -181,15 +441,18 @@ function modoEspectador() {
           });
         }
         enviarStatus();
-        setInterval(enviarStatus, INTERVALO_STATUS);
+        statusTimer = setInterval(enviarStatus, INTERVALO_STATUS);
         document.addEventListener('visibilitychange', enviarStatus);
         video.addEventListener('pause', enviarStatus);
         video.addEventListener('playing', enviarStatus);
       });
 
       conn.on('data', d => {
-        if (d && d.tipo === 'cheio') ui.textContent = 'A sala está cheia.';
+        if (d && d.tipo === 'cheio') sair('A sala está cheia.');
       });
+
+      // se quem transmite parar ou cair, avisa
+      conn.on('close', () => sair('A transmissão acabou.'));
     });
   };
 }
