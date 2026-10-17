@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Transmissão de tela</title>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+  body { font-family: sans-serif; background: #111; color: #eee; text-align: center; padding: 1rem; }
+  video { width: 100%; max-width: 960px; background: #000; margin-top: 1rem; }
+  button { font-size: 1.1rem; padding: .6rem 1.2rem; }
+  input { font-size: 1rem; width: 80%; max-width: 500px; }
+</style>
+</head>
+<body>
+<h2>Transmissão de tela</h2>
+<div id="ui"></div>
+<video id="v" autoplay playsinline controls></video>
+
+<script>
+// ===== CONFIGURAÇÕES =====
+const MAX_PESSOAS = 10;          // contando com quem transmite
+const BITRATE = 1500000;         // 1.5 Mbps por espectador (baixe se a sua internet for fraca)
+
+const ui = document.getElementById('ui');
+const video = document.getElementById('v');
+const hostId = location.hash.slice(1); // se tiver #id na URL, é espectador
+
+if (hostId) modoEspectador(); else modoTransmissor();
+
+// ===== QUEM TRANSMITE =====
+function modoTransmissor() {
+  ui.innerHTML = '<button id="go">Começar a transmitir</button>';
+  document.getElementById('go').onclick = async () => {
+    const stream = await navigator.mediaDevices.getDisplayMedia({
+      video: { frameRate: 30 },
+      audio: true
+    });
+    video.srcObject = stream;
+    video.muted = true; // evita eco da sua própria transmissão
+
+    const peer = new Peer();
+    let espectadores = 0;
+
+    peer.on('open', id => {
+      const link = location.href.split('#')[0] + '#' + id;
+      ui.innerHTML = 'Mande este link pros amigos:<br><input readonly value="' + link + '">';
+    });
+
+    // um espectador entrou: liga pra ele mandando a tela
+    peer.on('connection', conn => {
+      conn.on('open', () => {
+        if (espectadores >= MAX_PESSOAS - 1) {
+          conn.send('cheio');
+          conn.close();
+          return;
+        }
+        espectadores++;
+        const call = peer.call(conn.peer, stream);
+        limitarBitrate(call);
+        call.on('close', () => espectadores--);
+        conn.on('close', () => { espectadores--; call.close(); });
+      });
+    });
+  };
+}
+
+function limitarBitrate(call) {
+  setTimeout(() => {
+    call.peerConnection.getSenders().forEach(s => {
+      if (s.track && s.track.kind === 'video') {
+        const p = s.getParameters();
+        if (!p.encodings || !p.encodings.length) p.encodings = [{}];
+        p.encodings[0].maxBitrate = BITRATE;
+        s.setParameters(p);
+      }
+    });
+  }, 1000);
+}
+
+// ===== QUEM ASSISTE =====
+function modoEspectador() {
+  ui.innerHTML = '<button id="join">Assistir</button>';
+  document.getElementById('join').onclick = () => {
+    ui.textContent = 'Conectando...';
+    const peer = new Peer();
+
+    peer.on('call', call => {
+      call.answer(); // não manda nada de volta, só recebe
+      call.on('stream', s => {
+        video.srcObject = s;
+        ui.textContent = 'Assistindo!';
+      });
+    });
+
+    peer.on('open', () => {
+      const conn = peer.connect(hostId);
+      conn.on('data', d => { if (d === 'cheio') ui.textContent = 'A sala está cheia.'; });
+    });
+  };
+}
+</script>
+</body>
+</html>
