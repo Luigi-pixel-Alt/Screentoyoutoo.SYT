@@ -9,20 +9,28 @@
   body { font-family: sans-serif; background: #111; color: #eee; text-align: center; padding: 1rem; }
   video { width: 100%; max-width: 960px; background: #000; margin-top: 1rem; }
   button { font-size: 1.1rem; padding: .6rem 1.2rem; }
-  input { font-size: 1rem; width: 80%; max-width: 500px; }
+  input { font-size: 1rem; width: 80%; max-width: 500px; margin: .3rem 0; }
+  #painel { margin: 1rem auto; max-width: 500px; text-align: left; }
+  #painel .titulo { font-weight: bold; margin-bottom: .4rem; }
+  #painel .pessoa { padding: .3rem .6rem; background: #222; border-radius: 6px; margin: .25rem 0; }
+  small { color: #999; }
 </style>
 </head>
 <body>
 <h2>Transmissão de tela</h2>
 <div id="ui"></div>
+<div id="painel"></div>
 <video id="v" autoplay playsinline controls></video>
 
 <script>
 // ===== CONFIGURAÇÕES =====
 const MAX_PESSOAS = 10;          // contando com quem transmite
 const BITRATE = 1500000;         // 1.5 Mbps por espectador (baixe se a sua internet for fraca)
+const INTERVALO_STATUS = 3000;   // espectador avisa o status a cada 3s
+const TEMPO_SEM_SINAL = 9000;    // se ficar 9s sem avisar, aparece "sem sinal"
 
 const ui = document.getElementById('ui');
+const painel = document.getElementById('painel');
 const video = document.getElementById('v');
 const hostId = location.hash.slice(1); // se tiver #id na URL, é espectador
 
@@ -39,29 +47,91 @@ function modoTransmissor() {
     video.srcObject = stream;
     video.muted = true; // evita eco da sua própria transmissão
 
+    // som de aviso (criado aqui porque o clique libera o áudio do navegador)
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    let somLigado = true;
+    function beep(freq) {
+      if (!somLigado) return;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.frequency.value = freq;
+      gain.gain.value = 0.15;
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.15);
+    }
+
     const peer = new Peer();
-    let espectadores = 0;
+    const viewers = new Map(); // id -> { nome, visivel, tocando, ultimo }
 
     peer.on('open', id => {
       const link = location.href.split('#')[0] + '#' + id;
-      ui.innerHTML = 'Mande este link pros amigos:<br><input readonly value="' + link + '">';
+      ui.innerHTML = 'Mande este link pros amigos:<br><input readonly value="' + link + '">' +
+        '<br><label><input type="checkbox" id="som" checked style="width:auto"> Som de aviso quando alguém entrar/sair</label>';
+      document.getElementById('som').onchange = e => { somLigado = e.target.checked; };
     });
 
     // um espectador entrou: liga pra ele mandando a tela
     peer.on('connection', conn => {
+      let call = null;
+
       conn.on('open', () => {
-        if (espectadores >= MAX_PESSOAS - 1) {
-          conn.send('cheio');
-          conn.close();
+        if (viewers.size >= MAX_PESSOAS - 1) {
+          conn.send({ tipo: 'cheio' });
+          setTimeout(() => conn.close(), 500);
           return;
         }
-        espectadores++;
-        const call = peer.call(conn.peer, stream);
+        viewers.set(conn.peer, { nome: 'Alguém', visivel: true, tocando: false, ultimo: Date.now() });
+        call = peer.call(conn.peer, stream);
         limitarBitrate(call);
-        call.on('close', () => espectadores--);
-        conn.on('close', () => { espectadores--; call.close(); });
+        render();
+      });
+
+      conn.on('data', d => {
+        const v = viewers.get(conn.peer);
+        if (!v || !d) return;
+        v.ultimo = Date.now();
+        if (d.tipo === 'oi') {
+          v.nome = String(d.nome || 'Alguém').slice(0, 20);
+          beep(880); // agudo = entrou
+        } else if (d.tipo === 'status') {
+          v.visivel = !!d.visivel;
+          v.tocando = !!d.tocando;
+        }
+        render();
+      });
+
+      conn.on('close', () => {
+        if (viewers.delete(conn.peer)) beep(440); // grave = saiu
+        if (call) call.close();
+        render();
       });
     });
+
+    function estado(v) {
+      if (Date.now() - v.ultimo > TEMPO_SEM_SINAL) return '⚠️ sem sinal';
+      if (!v.visivel) return '💤 aba em segundo plano';
+      if (!v.tocando) return '⏸️ carregando/pausado';
+      return '👁️ assistindo';
+    }
+
+    function render() {
+      painel.innerHTML = '';
+      const t = document.createElement('div');
+      t.className = 'titulo';
+      t.textContent = 'Espectadores: ' + viewers.size + '/' + (MAX_PESSOAS - 1);
+      painel.appendChild(t);
+      viewers.forEach(v => {
+        const p = document.createElement('div');
+        p.className = 'pessoa';
+        p.textContent = v.nome + ' — ' + estado(v); // textContent evita código malicioso nos nomes
+        painel.appendChild(p);
+      });
+    }
+
+    render();
+    setInterval(render, 2000); // atualiza o "sem sinal" mesmo se ninguém mandar nada
   };
 }
 
@@ -80,8 +150,12 @@ function limitarBitrate(call) {
 
 // ===== QUEM ASSISTE =====
 function modoEspectador() {
-  ui.innerHTML = '<button id="join">Assistir</button>';
+  ui.innerHTML = '<input id="nome" placeholder="Seu nome" maxlength="20"><br>' +
+    '<button id="join">Assistir</button><br>' +
+    '<small>Quem transmite vê se você está com a aba aberta e o vídeo rodando.</small>';
+
   document.getElementById('join').onclick = () => {
+    const nome = document.getElementById('nome').value.trim() || 'Alguém';
     ui.textContent = 'Conectando...';
     const peer = new Peer();
 
@@ -95,7 +169,27 @@ function modoEspectador() {
 
     peer.on('open', () => {
       const conn = peer.connect(hostId);
-      conn.on('data', d => { if (d === 'cheio') ui.textContent = 'A sala está cheia.'; });
+
+      conn.on('open', () => {
+        conn.send({ tipo: 'oi', nome: nome });
+
+        function enviarStatus() {
+          conn.send({
+            tipo: 'status',
+            visivel: !document.hidden,
+            tocando: !!video.srcObject && !video.paused && video.readyState >= 2
+          });
+        }
+        enviarStatus();
+        setInterval(enviarStatus, INTERVALO_STATUS);
+        document.addEventListener('visibilitychange', enviarStatus);
+        video.addEventListener('pause', enviarStatus);
+        video.addEventListener('playing', enviarStatus);
+      });
+
+      conn.on('data', d => {
+        if (d && d.tipo === 'cheio') ui.textContent = 'A sala está cheia.';
+      });
     });
   };
 }
