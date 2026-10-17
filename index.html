@@ -26,14 +26,22 @@
   .cfg-linha > div:first-child { margin-bottom: .3rem; }
   .cfg-linha button { font-size: .95rem; padding: .3rem .6rem; }
   #preview .avatar { width: 80px; height: 80px; margin-bottom: .4rem; }
+
+  #hostinfo { display: flex; align-items: center; justify-content: center; gap: .5rem; margin-top: .8rem; }
+  #hostinfo .avatar { width: 30px; height: 30px; }
+  #aviso { color: #e8b44a; min-height: 1.2rem; margin-top: .4rem; }
+  .controles { display: flex; align-items: center; justify-content: center; gap: .6rem; flex-wrap: wrap; margin-top: .6rem; }
+  .controles button { font-size: 1rem; padding: .4rem .9rem; }
 </style>
 </head>
 <body>
 <h2>Transmissão de tela</h2>
 <div id="ui"></div>
+<div id="hostinfo"></div>
+<div id="aviso"></div>
 <div id="config"></div>
 <div id="painel"></div>
-<video id="v" autoplay playsinline controls></video>
+<video id="v" autoplay playsinline></video>
 
 <script>
 // ===== CONFIGURAÇÕES =====
@@ -56,6 +64,8 @@ const SONS_PRONTOS = [
 const ui = document.getElementById('ui');
 const painel = document.getElementById('painel');
 const cfgBox = document.getElementById('config');
+const hostInfo = document.getElementById('hostinfo');
+const aviso = document.getElementById('aviso');
 const video = document.getElementById('v');
 const hostId = location.hash.slice(1); // se tiver #id na URL, é espectador
 
@@ -90,7 +100,7 @@ function reduzirFoto(file) {
   });
 }
 
-// só aceita foto pequena em JPEG (quem transmite não confia em qualquer coisa que chega)
+// só aceita foto pequena em JPEG (não se confia em qualquer coisa que chega pela rede)
 function fotoValida(f) {
   return typeof f === 'string' && f.length < 30000 && /^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/.test(f);
 }
@@ -108,20 +118,64 @@ function criarAvatar(nome, foto) {
   return d;
 }
 
+// formulário de nome + foto (usado por quem transmite e por quem assiste)
+function formPerfil(chave, textoBotao, idBotao, aviso) {
+  const perfil = lerSalvo(chave, { nome: '', foto: null });
+
+  ui.innerHTML = '<div id="preview"></div>' +
+    '<input id="nome" placeholder="Seu nome" maxlength="20"><br>' +
+    '<label class="btn-arquivo">📷 Escolher foto (opcional)<input type="file" id="foto" accept="image/*" style="display:none"></label><br><br>' +
+    '<button id="' + idBotao + '">' + textoBotao + '</button><br>' +
+    '<small>' + aviso + '</small>';
+
+  const nomeEl = document.getElementById('nome');
+  const prev = document.getElementById('preview');
+  nomeEl.value = perfil.nome || '';
+
+  function mostrarPreview() {
+    prev.innerHTML = '';
+    if (fotoValida(perfil.foto)) prev.appendChild(criarAvatar('', perfil.foto));
+  }
+  mostrarPreview();
+
+  document.getElementById('foto').onchange = e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    reduzirFoto(f).then(d => { perfil.foto = d; mostrarPreview(); })
+                  .catch(() => alert('Não consegui abrir essa imagem.'));
+  };
+
+  // chamada quando o botão é clicado: pega o nome, salva e devolve o perfil
+  return function confirmar(nomePadrao) {
+    perfil.nome = nomeEl.value.trim() || nomePadrao;
+    gravarSalvo(chave, perfil); // lembra nome e foto da próxima vez
+    return perfil;
+  };
+}
+
 if (hostId) modoEspectador(); else modoTransmissor();
 
 // ===== QUEM TRANSMITE =====
 function modoTransmissor() {
-  ui.innerHTML = '<button id="go">Começar a transmitir</button>';
+  const confirmar = formPerfil('syt-perfil-host', 'Começar a transmitir', 'go',
+    'Os espectadores vão ver seu nome e sua foto.');
+
   document.getElementById('go').onclick = async () => {
-    const stream = await navigator.mediaDevices.getDisplayMedia({
-      video: { frameRate: 30 },
-      audio: true
-    });
+    const perfil = confirmar('Anônimo');
+
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { frameRate: 30 },
+        audio: true
+      });
+    } catch (e) {
+      return; // cancelou a escolha da tela
+    }
     video.srcObject = stream;
     video.muted = true; // evita eco da sua própria transmissão
 
-    // ----- sons -----
+    // ----- sons de aviso (entrou/saiu) -----
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     let somLigado = true;
     let cfgAberto = false;
@@ -254,9 +308,33 @@ function modoTransmissor() {
 
     // ----- conexão -----
     const peer = new Peer();
-    const viewers = new Map(); // id -> { nome, foto, visivel, tocando, ultimo }
+    const viewers = new Map(); // id -> { conn, nome, foto, visivel, ultimo }
     let timer;
     let encerrado = false;
+    let mudo = false; // áudio da transmissão silenciado pra todo mundo
+
+    // liga/desliga o áudio que vai pros espectadores
+    function alternarMudo() {
+      const faixas = stream.getAudioTracks();
+      if (!faixas.length) return;
+      mudo = !mudo;
+      faixas.forEach(t => { t.enabled = !mudo; });
+      atualizarBotaoMudo();
+      viewers.forEach(v => {
+        try { v.conn.send({ tipo: 'mudo', mudo: mudo }); } catch (e) {}
+      });
+    }
+
+    function atualizarBotaoMudo() {
+      const b = document.getElementById('mutar');
+      if (!b) return;
+      if (!stream.getAudioTracks().length) {
+        b.disabled = true;
+        b.textContent = '🔇 Sem áudio compartilhado';
+        return;
+      }
+      b.textContent = mudo ? '🔊 Reativar áudio da transmissão' : '🔇 Mutar áudio da transmissão';
+    }
 
     // encerra tudo: para de capturar a tela, desconecta os amigos e limpa a página
     function parar() {
@@ -278,9 +356,12 @@ function modoTransmissor() {
       const link = location.href.split('#')[0] + '#' + id;
       ui.innerHTML = 'Mande este link pros amigos:<br><input readonly value="' + link + '">' +
         '<br><label><input type="checkbox" id="som" checked style="width:auto"> Som de aviso quando alguém entrar/sair</label>' +
-        '<br><br><button id="parar">Parar transmissão</button>';
+        '<br><br><button id="mutar">🔇 Mutar áudio da transmissão</button>' +
+        ' <button id="parar">Parar transmissão</button>';
       document.getElementById('som').onchange = e => { somLigado = e.target.checked; };
+      document.getElementById('mutar').onclick = alternarMudo;
       document.getElementById('parar').onclick = parar;
+      atualizarBotaoMudo();
       desenharConfig();
     });
 
@@ -294,7 +375,7 @@ function modoTransmissor() {
           setTimeout(() => conn.close(), 500);
           return;
         }
-        viewers.set(conn.peer, { nome: 'Alguém', foto: null, visivel: true, tocando: false, ultimo: Date.now() });
+        viewers.set(conn.peer, { conn: conn, nome: 'Alguém', foto: null, visivel: true, ultimo: Date.now() });
         call = peer.call(conn.peer, stream);
         limitarBitrate(call);
         render();
@@ -307,10 +388,11 @@ function modoTransmissor() {
         if (d.tipo === 'oi') {
           v.nome = String(d.nome || 'Alguém').slice(0, 20);
           v.foto = fotoValida(d.foto) ? d.foto : null;
+          // responde com quem está transmitindo e se o áudio está mutado
+          conn.send({ tipo: 'host', nome: perfil.nome, foto: perfil.foto, mudo: mudo });
           tocar('entrou');
         } else if (d.tipo === 'status') {
           v.visivel = !!d.visivel;
-          v.tocando = !!d.tocando;
         }
         render();
       });
@@ -325,8 +407,21 @@ function modoTransmissor() {
     function estado(v) {
       if (Date.now() - v.ultimo > TEMPO_SEM_SINAL) return '⚠️ sem sinal';
       if (!v.visivel) return '💤 aba em segundo plano';
-      if (!v.tocando) return '⏸️ carregando/pausado';
       return '👁️ assistindo';
+    }
+
+    function linhaPessoa(nome, foto, textoEstado) {
+      const p = document.createElement('div');
+      p.className = 'pessoa';
+      const info = document.createElement('div');
+      const n = document.createElement('div');
+      n.textContent = nome; // textContent evita código malicioso nos nomes
+      const e = document.createElement('div');
+      e.className = 'estado';
+      e.textContent = textoEstado;
+      info.append(n, e);
+      p.append(criarAvatar(nome, foto), info);
+      return p;
     }
 
     function render() {
@@ -336,19 +431,8 @@ function modoTransmissor() {
       t.className = 'titulo';
       t.textContent = 'Espectadores: ' + viewers.size + '/' + (MAX_PESSOAS - 1);
       painel.appendChild(t);
-      viewers.forEach(v => {
-        const p = document.createElement('div');
-        p.className = 'pessoa';
-        const info = document.createElement('div');
-        const n = document.createElement('div');
-        n.textContent = v.nome; // textContent evita código malicioso nos nomes
-        const e = document.createElement('div');
-        e.className = 'estado';
-        e.textContent = estado(v);
-        info.append(n, e);
-        p.append(criarAvatar(v.nome, v.foto), info);
-        painel.appendChild(p);
-      });
+      painel.appendChild(linhaPessoa(perfil.nome + ' (você)', perfil.foto, '📺 transmitindo'));
+      viewers.forEach(v => painel.appendChild(linhaPessoa(v.nome, v.foto, estado(v))));
     }
 
     render();
@@ -371,40 +455,17 @@ function limitarBitrate(call) {
 
 // ===== QUEM ASSISTE =====
 function modoEspectador() {
-  const perfil = lerSalvo('syt-perfil', { nome: '', foto: null });
-
-  ui.innerHTML = '<div id="preview"></div>' +
-    '<input id="nome" placeholder="Seu nome" maxlength="20"><br>' +
-    '<label class="btn-arquivo">📷 Escolher foto (opcional)<input type="file" id="foto" accept="image/*" style="display:none"></label><br><br>' +
-    '<button id="join">Assistir</button><br>' +
-    '<small>Quem transmite vê seu nome, sua foto e se você está com a aba aberta e o vídeo rodando.</small>';
-
-  const nomeEl = document.getElementById('nome');
-  const prev = document.getElementById('preview');
-  nomeEl.value = perfil.nome || '';
-
-  function mostrarPreview() {
-    prev.innerHTML = '';
-    if (fotoValida(perfil.foto)) prev.appendChild(criarAvatar('', perfil.foto));
-  }
-  mostrarPreview();
-
-  document.getElementById('foto').onchange = e => {
-    const f = e.target.files[0];
-    if (!f) return;
-    reduzirFoto(f).then(d => { perfil.foto = d; mostrarPreview(); })
-                  .catch(() => alert('Não consegui abrir essa imagem.'));
-  };
+  const confirmar = formPerfil('syt-perfil', 'Assistir', 'join',
+    'Quem transmite vê seu nome, sua foto e se você está com a aba aberta.');
 
   document.getElementById('join').onclick = () => {
-    const nome = nomeEl.value.trim() || 'Alguém';
-    perfil.nome = nome;
-    gravarSalvo('syt-perfil', perfil); // lembra nome e foto da próxima vez
+    const perfil = confirmar('Alguém');
 
     ui.textContent = 'Conectando...';
     const peer = new Peer();
     let statusTimer;
     let saiu = false;
+    let montado = false;
 
     // sai da transmissão: desconecta e mostra um botão pra entrar de novo
     function sair(msg) {
@@ -413,7 +474,43 @@ function modoEspectador() {
       clearInterval(statusTimer);
       peer.destroy();
       video.srcObject = null;
+      hostInfo.innerHTML = '';
+      aviso.textContent = '';
       ui.innerHTML = msg + '<br><button onclick="location.reload()">Entrar de novo</button>';
+    }
+
+    // botões do espectador: mutar (só pra ele), volume, tela cheia e sair
+    function montarControles() {
+      ui.innerHTML = 'Assistindo!' +
+        '<div class="controles">' +
+        '<button id="btnMudo">🔇 Mutar</button>' +
+        '<input type="range" id="vol" min="0" max="100" value="100" style="width:120px">' +
+        '<button id="btnTela">⛶ Tela cheia</button>' +
+        '<button id="sair">Sair</button>' +
+        '</div>';
+      const btnMudo = document.getElementById('btnMudo');
+      btnMudo.onclick = () => {
+        video.muted = !video.muted;
+        btnMudo.textContent = video.muted ? '🔊 Ativar som' : '🔇 Mutar';
+      };
+      document.getElementById('vol').oninput = e => { video.volume = e.target.value / 100; };
+      document.getElementById('btnTela').onclick = () => {
+        if (video.requestFullscreen) video.requestFullscreen();
+      };
+      document.getElementById('sair').onclick = () => sair('Você saiu.');
+    }
+
+    function mostrarHost(d) {
+      hostInfo.innerHTML = '';
+      const t = document.createElement('span');
+      t.textContent = '📺 Transmitindo:';
+      const n = document.createElement('strong');
+      n.textContent = String(d.nome || 'Anônimo').slice(0, 20);
+      hostInfo.append(t, criarAvatar(d.nome, d.foto), n);
+    }
+
+    function mostrarMudo(mudo) {
+      aviso.textContent = mudo ? '🔇 O transmissor silenciou o áudio da transmissão.' : '';
     }
 
     peer.on('call', call => {
@@ -421,34 +518,35 @@ function modoEspectador() {
       call.on('stream', s => {
         if (saiu) return;
         video.srcObject = s;
-        ui.innerHTML = 'Assistindo!<br><button id="sair">Sair</button>';
-        document.getElementById('sair').onclick = () => sair('Você saiu.');
+        if (!montado) { montado = true; montarControles(); }
       });
+    });
+
+    // transmissão ao vivo não faz sentido pausada: se pausar, volta a tocar
+    video.addEventListener('pause', () => {
+      if (!saiu && video.srcObject) video.play().catch(() => {});
     });
 
     peer.on('open', () => {
       const conn = peer.connect(hostId);
 
       conn.on('open', () => {
-        conn.send({ tipo: 'oi', nome: nome, foto: fotoValida(perfil.foto) ? perfil.foto : null });
+        conn.send({ tipo: 'oi', nome: perfil.nome, foto: fotoValida(perfil.foto) ? perfil.foto : null });
 
         function enviarStatus() {
           if (saiu || !conn.open) return;
-          conn.send({
-            tipo: 'status',
-            visivel: !document.hidden,
-            tocando: !!video.srcObject && !video.paused && video.readyState >= 2
-          });
+          conn.send({ tipo: 'status', visivel: !document.hidden });
         }
         enviarStatus();
         statusTimer = setInterval(enviarStatus, INTERVALO_STATUS);
         document.addEventListener('visibilitychange', enviarStatus);
-        video.addEventListener('pause', enviarStatus);
-        video.addEventListener('playing', enviarStatus);
       });
 
       conn.on('data', d => {
-        if (d && d.tipo === 'cheio') sair('A sala está cheia.');
+        if (!d) return;
+        if (d.tipo === 'cheio') sair('A sala está cheia.');
+        else if (d.tipo === 'host') { mostrarHost(d); mostrarMudo(!!d.mudo); }
+        else if (d.tipo === 'mudo') mostrarMudo(!!d.mudo);
       });
 
       // se quem transmite parar ou cair, avisa
