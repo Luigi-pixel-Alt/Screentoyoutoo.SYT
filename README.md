@@ -12,3 +12,5 @@ e Aqui está o meu email:
 pedrohenriquenobrasiloficial@gmail.com
 
 tenha um Bom dia, Boa tarde ou Boa noite.
+
+curiosidade: Esse site foi feito com IA, eu n sei mexer com programação em HTML e isso daqui é só algo besta, n deveria ser algo popular.
