@@ -62,6 +62,15 @@
   #vazio { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 1rem; font-family: var(--pixel); font-size: var(--t-titulo); line-height: 1.6; color: #9aa0a8; animation: piscar 1.2s steps(2) infinite; }
   .tela.ativo #vazio { display: none; }
 
+  /* tela cheia: o contêiner inteiro (e não só o <video>) fica em tela cheia, sem a barra nativa do navegador */
+  .tela:fullscreen { aspect-ratio: auto; width: 100%; height: 100%; border: 0; box-shadow: none; margin: 0; }
+  .tela:-webkit-full-screen { aspect-ratio: auto; width: 100%; height: 100%; border: 0; box-shadow: none; margin: 0; }
+  .tela.parado { cursor: none; }
+  #ov-tela { position: absolute; left: 0; right: 0; bottom: 0; display: none; align-items: center; justify-content: center; gap: .6rem; flex-wrap: wrap; padding: 1rem; background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,.75)); transition: opacity .2s; }
+  .tela:fullscreen #ov-tela { display: flex; }
+  .tela:-webkit-full-screen #ov-tela { display: flex; }
+  #ov-tela.oculto { opacity: 0; pointer-events: none; }
+
   /* ===== BOTÕES E CAMPOS ===== */
   button, .btn-arquivo { font-family: var(--corpo); font-size: var(--t-corpo); text-transform: uppercase; padding: .3rem .9rem; color: var(--destaque-texto); background: var(--destaque); border: 3px solid var(--borda); box-shadow: 4px 4px 0 var(--borda); cursor: pointer; margin: .2rem; }
   button:hover, .btn-arquivo:hover { filter: brightness(1.12); }
@@ -104,6 +113,26 @@
   .cfg-linha button, .cfg-linha .btn-arquivo { font-size: var(--t-pequeno); padding: .15rem .6rem; }
 
   .controles { display: flex; align-items: center; justify-content: center; gap: .5rem; flex-wrap: wrap; }
+
+  /* ===== CHAT ===== */
+  #chat { background: var(--painel); border: 4px solid var(--borda); box-shadow: 6px 6px 0 var(--borda); padding: .9rem 1rem; margin-bottom: 1.2rem; }
+  #chat:empty { display: none; }
+  #msgs { height: 260px; overflow-y: auto; background: var(--bg); border: 3px solid var(--borda); padding: .4rem .5rem; margin-bottom: .6rem; }
+  .msg { margin: .35rem 0; overflow-wrap: anywhere; animation: entra .3s steps(5) both; }
+  .msg .quem { margin-right: .4rem; }
+  .msg.sistema { color: var(--suave); }
+  .msg img.desenho { display: block; max-width: 100%; margin-top: .3rem; border: 3px solid var(--borda); background: #fff; }
+  .chat-form { display: flex; gap: .4rem; align-items: center; }
+  .chat-form input { flex: 1; min-width: 0; width: auto; max-width: none; margin: 0; }
+  .chat-form button { margin: 0; padding: .3rem .6rem; }
+  .pad { margin-top: .7rem; }
+  .pad canvas { display: block; width: 100%; aspect-ratio: 8 / 5; background: #fff; border: 3px solid var(--borda); touch-action: none; cursor: crosshair; }
+  .pad-ferr { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; margin: .5rem 0; }
+  .pad-ferr button { margin: 0; padding: .1rem .6rem; font-size: var(--t-pequeno); }
+  button.cor { width: 28px; height: 28px; padding: 0; box-shadow: none; }
+  button.cor:active { transform: none; }
+  button.cor.sel { outline: 3px solid var(--destaque); outline-offset: 2px; }
+  button.sel { background: var(--destaque); color: #fff; }
 
   /* ===== AVISOS (TOASTS) ===== */
   #toasts { position: fixed; right: 1rem; bottom: 1rem; display: flex; flex-direction: column; gap: .6rem; z-index: 50; pointer-events: none; }
@@ -150,6 +179,7 @@
   <aside id="lateral" hidden>
     <div id="config"></div>
     <div id="painel"></div>
+    <div id="chat"></div>
   </aside>
 </main>
 
@@ -184,6 +214,7 @@ const vazio = document.getElementById('vazio');
 const lateral = document.getElementById('lateral');
 const app = document.getElementById('app');
 const toasts = document.getElementById('toasts');
+const chatBox = document.getElementById('chat');
 const video = document.getElementById('v');
 const btnTema = document.getElementById('tema');
 const hostId = location.hash.slice(1); // se tiver #id na URL, é espectador
@@ -258,6 +289,7 @@ function criarAvatar(nome, foto) {
   const d = document.createElement('div');
   d.className = 'avatar letra';
   d.textContent = (nome || '?').trim().charAt(0).toUpperCase() || '?';
+  d.style.background = corNome(nome);
   return d;
 }
 
@@ -274,15 +306,17 @@ function criarLinha() {
   el.append(avatarEl, info);
   return { el: el, avatarEl: avatarEl, nomeEl: nomeEl, estadoEl: estadoEl, chave: null };
 }
-function atualizarLinha(l, nome, foto, e) {
+function atualizarLinha(l, nome, foto, e, base) {
+  base = base || nome; // nome usado pra cor e letra (sem o "(você)")
   const chave = nome + '|' + (foto || '');
   if (l.chave !== chave) {
-    const novo = criarAvatar(nome, foto);
+    const novo = criarAvatar(base, foto);
     l.avatarEl.replaceWith(novo);
     l.avatarEl = novo;
     l.chave = chave;
   }
   l.nomeEl.textContent = nome; // textContent evita código malicioso nos nomes
+  l.nomeEl.style.color = corNome(base);
   l.estadoEl.textContent = e.texto;
   l.estadoEl.className = 'estado ' + e.classe;
 }
@@ -320,6 +354,184 @@ function formPerfil(chave, textoBotao, idBotao, dica) {
     gravarSalvo(chave, perfil); // lembra nome e foto da próxima vez
     return perfil;
   };
+}
+
+// ===== CHAT (texto e desenho) =====
+// só aceita desenho pequeno em PNG/JPEG
+function imgValida(s) {
+  return typeof s === 'string' && s.length < 100000 && /^data:image\/(png|jpeg);base64,[A-Za-z0-9+\/=]+$/.test(s);
+}
+
+// cada nome ganha sempre a mesma cor, escolhida de uma paleta fixa (igual no PC de todo mundo)
+const CORES_NOME = ['#e5534b', '#f0883e', '#d4a72c', '#2ea043', '#14b8a6', '#2f9de4', '#5865f2', '#a371f7', '#ec6cb9', '#a0705a'];
+function corNome(nome) {
+  const t = String(nome || '').trim().toLowerCase(); // maiúsculas/minúsculas não mudam a cor
+  let h = 0;
+  for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) >>> 0;
+  return CORES_NOME[h % CORES_NOME.length];
+}
+
+// monta o chat dentro de #chat. enviar(obj) manda { texto } ou { img }. Devolve { receber(msg) }.
+function montarChat(enviar) {
+  chatBox.innerHTML = '';
+
+  const titulo = document.createElement('div');
+  titulo.className = 'titulo';
+  titulo.textContent = 'Chat';
+
+  const msgs = document.createElement('div');
+  msgs.id = 'msgs';
+
+  // linha de texto
+  const form = document.createElement('div');
+  form.className = 'chat-form';
+  const inp = document.createElement('input');
+  inp.placeholder = 'Mensagem...';
+  inp.maxLength = 200;
+  const bEnviar = document.createElement('button');
+  bEnviar.textContent = 'Enviar';
+  const bDesenhar = document.createElement('button');
+  bDesenhar.className = 'sec';
+  bDesenhar.textContent = 'Desenhar';
+  form.append(inp, bEnviar, bDesenhar);
+
+  function enviarTexto() {
+    const t = inp.value.trim();
+    if (!t) return;
+    enviar({ texto: t.slice(0, 200) });
+    inp.value = '';
+  }
+  bEnviar.onclick = enviarTexto;
+  inp.onkeydown = e => { if (e.key === 'Enter') enviarTexto(); };
+
+  // quadro de desenho
+  const pad = document.createElement('div');
+  pad.className = 'pad';
+  pad.hidden = true;
+  const cv = document.createElement('canvas');
+  cv.width = 320;
+  cv.height = 200;
+  const ctx = cv.getContext('2d');
+  function limpar() { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cv.width, cv.height); }
+  limpar();
+
+  let cor = '#111214', tam = 4, desenhando = false, ultimo = null;
+
+  function pos(e) {
+    const r = cv.getBoundingClientRect();
+    return { x: (e.clientX - r.left) * cv.width / r.width, y: (e.clientY - r.top) * cv.height / r.height };
+  }
+  function ponto(p) {
+    ctx.fillStyle = cor;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, tam / 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  cv.onpointerdown = e => {
+    desenhando = true;
+    cv.setPointerCapture(e.pointerId);
+    ultimo = pos(e);
+    ponto(ultimo);
+  };
+  cv.onpointermove = e => {
+    if (!desenhando) return;
+    const p = pos(e);
+    ctx.strokeStyle = cor;
+    ctx.lineWidth = tam;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(ultimo.x, ultimo.y);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    ultimo = p;
+  };
+  cv.onpointerup = cv.onpointercancel = () => { desenhando = false; };
+
+  // ferramentas: cores (a branca é a borracha), tamanhos, limpar, enviar
+  const ferr = document.createElement('div');
+  ferr.className = 'pad-ferr';
+  const CORES = ['#111214', '#ed4245', '#faa61a', '#fee75c', '#3ba55d', '#5865f2', '#eb459e', '#ffffff'];
+  const botoesCor = [];
+  CORES.forEach((c, i) => {
+    const b = document.createElement('button');
+    b.className = 'cor' + (i === 0 ? ' sel' : '');
+    b.style.background = c;
+    b.title = c === '#ffffff' ? 'Borracha' : 'Cor';
+    b.onclick = () => {
+      cor = c;
+      botoesCor.forEach(x => x.classList.remove('sel'));
+      b.classList.add('sel');
+    };
+    botoesCor.push(b);
+    ferr.appendChild(b);
+  });
+  const botoesTam = [];
+  [['P', 2], ['M', 5], ['G', 12]].forEach(([rotulo, t]) => {
+    const b = document.createElement('button');
+    b.className = 'sec' + (t === 5 ? ' sel' : '');
+    b.textContent = rotulo;
+    b.onclick = () => {
+      tam = t;
+      botoesTam.forEach(x => x.classList.remove('sel'));
+      b.classList.add('sel');
+    };
+    botoesTam.push(b);
+    ferr.appendChild(b);
+  });
+  tam = 5;
+  const bLimpar = document.createElement('button');
+  bLimpar.className = 'sec';
+  bLimpar.textContent = 'Limpar';
+  bLimpar.onclick = limpar;
+  const bEnvDes = document.createElement('button');
+  bEnvDes.textContent = 'Enviar desenho';
+  bEnvDes.onclick = () => {
+    let img = cv.toDataURL('image/png');
+    if (!imgValida(img)) img = cv.toDataURL('image/jpeg', 0.6); // se o PNG ficou pesado, tenta JPEG
+    if (!imgValida(img)) { alert('Desenho complexo demais. Tente algo mais simples.'); return; }
+    enviar({ img: img });
+    limpar();
+    pad.hidden = true;
+  };
+  ferr.append(bLimpar, bEnvDes);
+  pad.append(cv, ferr);
+  bDesenhar.onclick = () => { pad.hidden = !pad.hidden; };
+
+  chatBox.append(titulo, msgs, form, pad);
+
+  // mostra uma mensagem recebida (valida tudo, porque vem da rede)
+  function receber(m) {
+    if (!m) return;
+    const el = document.createElement('div');
+    el.className = 'msg';
+    if (m.sistema) {
+      el.classList.add('sistema');
+      el.textContent = String(m.texto || '').slice(0, 100);
+    } else {
+      const nome = String(m.nome || 'Alguém').slice(0, 20);
+      const q = document.createElement('span');
+      q.className = 'quem';
+      q.textContent = nome + ':';
+      q.style.color = corNome(nome);
+      el.appendChild(q);
+      if (typeof m.texto === 'string' && m.texto) {
+        el.appendChild(document.createTextNode(m.texto.slice(0, 200))); // texto puro, sem HTML
+      } else if (imgValida(m.img)) {
+        const im = document.createElement('img');
+        im.className = 'desenho';
+        im.onload = () => { msgs.scrollTop = msgs.scrollHeight; };
+        im.src = m.img;
+        el.appendChild(im);
+      } else {
+        return;
+      }
+    }
+    msgs.appendChild(el);
+    while (msgs.children.length > 100) msgs.firstChild.remove();
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  return { receber: receber };
 }
 
 if (hostId) modoEspectador(); else modoTransmissor();
@@ -496,7 +708,7 @@ function modoTransmissor() {
     const linhas = new Map(); // id -> linha da lista
     const linhaEu = criarLinha();
     lista.appendChild(linhaEu.el);
-    atualizarLinha(linhaEu, perfil.nome + ' (você)', perfil.foto, { texto: 'transmitindo', classe: 'live' });
+    atualizarLinha(linhaEu, perfil.nome + ' (você)', perfil.foto, { texto: 'transmitindo', classe: 'live' }, perfil.nome);
 
     function pulsar() {
       contador.classList.remove('pulso');
@@ -510,6 +722,13 @@ function modoTransmissor() {
     let timer;
     let encerrado = false;
     let mudo = false; // áudio da transmissão silenciado pra todo mundo
+
+    // ----- chat: tudo passa por aqui e é repassado pra todo mundo -----
+    const chat = montarChat(obj => transmitir(Object.assign({ tipo: 'msg', nome: perfil.nome }, obj)));
+    function transmitir(m) {
+      viewers.forEach(v => { try { v.conn.send(m); } catch (e) {} });
+      chat.receber(m);
+    }
 
     // liga/desliga o áudio que vai pros espectadores
     function alternarMudo() {
@@ -546,6 +765,7 @@ function modoTransmissor() {
       video.srcObject = null;
       painel.innerHTML = '';
       cfgBox.innerHTML = '';
+      chatBox.innerHTML = '';
       lateral.hidden = true;
       app.classList.remove('com-lateral');
       telaAtiva(false, 'TRANSMISSÃO ENCERRADA');
@@ -594,8 +814,19 @@ function modoTransmissor() {
           conn.send({ tipo: 'host', nome: perfil.nome, foto: perfil.foto, mudo: mudo });
           toast(v.nome + ' entrou', 'entrou');
           tocar('entrou');
+          transmitir({ tipo: 'msg', sistema: true, texto: v.nome + ' entrou' });
         } else if (d.tipo === 'status') {
           v.visivel = !!d.visivel;
+        } else if (d.tipo === 'chat') {
+          // o nome vem do que o transmissor já registrou (ninguém consegue se passar por outra pessoa)
+          const agora = Date.now();
+          if (agora - (v.ultimaMsg || 0) < 400) return; // anti-flood
+          v.ultimaMsg = agora;
+          const m = { tipo: 'msg', nome: v.nome };
+          if (typeof d.texto === 'string' && d.texto.trim()) m.texto = d.texto.trim().slice(0, 200);
+          else if (imgValida(d.img)) m.img = d.img;
+          else return;
+          transmitir(m);
         }
         render();
       });
@@ -605,6 +836,7 @@ function modoTransmissor() {
         if (v && viewers.delete(conn.peer)) {
           toast(v.nome + ' saiu', 'saiu');
           tocar('saiu');
+          transmitir({ tipo: 'msg', sistema: true, texto: v.nome + ' saiu' });
         }
         if (call) call.close();
         render();
@@ -676,6 +908,7 @@ function modoEspectador() {
     let statusTimer;
     let saiu = false;
     let montado = false;
+    let chat = null;
 
     // sai da transmissão: desconecta e mostra um botão pra entrar de novo
     function sair(msg) {
@@ -687,6 +920,14 @@ function modoEspectador() {
       hostInfo.innerHTML = '';
       aviso.textContent = '';
       barra.innerHTML = '';
+      const ovx = document.getElementById('ov-tela');
+      if (ovx) ovx.remove();
+      if (document.fullscreenElement || document.webkitFullscreenElement) {
+        try { (document.exitFullscreen || document.webkitExitFullscreen).call(document); } catch (e) {}
+      }
+      chatBox.innerHTML = '';
+      lateral.hidden = true;
+      app.classList.remove('com-lateral');
       telaAtiva(false, 'FIM DA TRANSMISSÃO');
       ui.innerHTML = msg + '<br><button onclick="location.reload()">Entrar de novo</button>';
     }
@@ -700,15 +941,70 @@ function modoEspectador() {
         '<button id="btnTela" class="sec">Tela cheia</button>' +
         '<button id="sair" class="perigo">Sair</button>' +
         '</div>';
+
+      // controles que aparecem por cima do vídeo quando está em tela cheia
+      const ov = document.createElement('div');
+      ov.id = 'ov-tela';
+      ov.innerHTML = '<button id="ovMudo" class="sec">Mutar</button>' +
+        '<input type="range" id="ovVol" min="0" max="100" value="100" style="width:130px">' +
+        '<button id="ovTela" class="sec">Sair da tela cheia</button>';
+      tela.appendChild(ov);
+
       const btnMudo = document.getElementById('btnMudo');
-      btnMudo.onclick = () => {
-        video.muted = !video.muted;
-        btnMudo.textContent = video.muted ? 'Ativar som' : 'Mutar';
-      };
-      document.getElementById('vol').oninput = e => { video.volume = e.target.value / 100; };
-      document.getElementById('btnTela').onclick = () => {
-        if (video.requestFullscreen) video.requestFullscreen();
-      };
+      const ovMudo = document.getElementById('ovMudo');
+      const vol = document.getElementById('vol');
+      const ovVol = document.getElementById('ovVol');
+      const btnTela = document.getElementById('btnTela');
+      let tOv;
+
+      function atualizarMudo() {
+        const t = video.muted ? 'Ativar som' : 'Mutar';
+        btnMudo.textContent = t;
+        ovMudo.textContent = t;
+      }
+      function alternarMudo() { video.muted = !video.muted; atualizarMudo(); }
+      function ajustarVolume(v) { video.volume = v / 100; vol.value = v; ovVol.value = v; }
+
+      function telaCheiaAtiva() {
+        return (document.fullscreenElement || document.webkitFullscreenElement) === tela;
+      }
+      function alternarTelaCheia() {
+        if (document.fullscreenElement || document.webkitFullscreenElement) {
+          (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+          return;
+        }
+        let r;
+        if (tela.requestFullscreen) r = tela.requestFullscreen();
+        else if (tela.webkitRequestFullscreen) r = tela.webkitRequestFullscreen();
+        else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen(); // iPhone
+        if (r && r.catch) r.catch(() => {});
+      }
+
+      // os controles por cima do vídeo somem sozinhos depois de 3s sem mexer o mouse
+      function mostrarOverlay() {
+        ov.classList.remove('oculto');
+        tela.classList.remove('parado');
+        clearTimeout(tOv);
+        tOv = setTimeout(() => {
+          if (telaCheiaAtiva()) { ov.classList.add('oculto'); tela.classList.add('parado'); }
+        }, 3000);
+      }
+      function aoMudarTelaCheia() {
+        const ativa = telaCheiaAtiva();
+        btnTela.textContent = ativa ? 'Sair da tela cheia' : 'Tela cheia';
+        if (ativa) mostrarOverlay();
+        else { clearTimeout(tOv); ov.classList.remove('oculto'); tela.classList.remove('parado'); }
+      }
+      document.addEventListener('fullscreenchange', aoMudarTelaCheia);
+      document.addEventListener('webkitfullscreenchange', aoMudarTelaCheia);
+      tela.addEventListener('mousemove', mostrarOverlay);
+      tela.addEventListener('touchstart', mostrarOverlay);
+
+      btnMudo.onclick = ovMudo.onclick = alternarMudo;
+      vol.oninput = e => ajustarVolume(e.target.value);
+      ovVol.oninput = e => ajustarVolume(e.target.value);
+      btnTela.onclick = document.getElementById('ovTela').onclick = alternarTelaCheia;
+      video.ondblclick = alternarTelaCheia; // clique duplo no vídeo também entra/sai
       document.getElementById('sair').onclick = () => sair('Você saiu.');
     }
 
@@ -718,6 +1014,7 @@ function modoEspectador() {
       t.textContent = 'Transmitindo:';
       const n = document.createElement('strong');
       n.textContent = String(d.nome || 'Anônimo').slice(0, 20);
+      n.style.color = corNome(n.textContent);
       hostInfo.append(t, criarAvatar(d.nome, d.foto), n);
     }
 
@@ -746,6 +1043,11 @@ function modoEspectador() {
       conn.on('open', () => {
         conn.send({ tipo: 'oi', nome: perfil.nome, foto: fotoValida(perfil.foto) ? perfil.foto : null });
 
+        // chat: o que você digita/desenha vai pro transmissor, que repassa pra todo mundo
+        chat = montarChat(obj => { if (conn.open) conn.send(Object.assign({ tipo: 'chat' }, obj)); });
+        lateral.hidden = false;
+        app.classList.add('com-lateral');
+
         function enviarStatus() {
           if (saiu || !conn.open) return;
           conn.send({ tipo: 'status', visivel: !document.hidden });
@@ -760,6 +1062,7 @@ function modoEspectador() {
         if (d.tipo === 'cheio') sair('A sala está cheia.');
         else if (d.tipo === 'host') { mostrarHost(d); mostrarMudo(!!d.mudo); }
         else if (d.tipo === 'mudo') mostrarMudo(!!d.mudo);
+        else if (d.tipo === 'msg' && chat) chat.receber(d);
       });
 
       // se quem transmite parar ou cair, avisa
