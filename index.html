@@ -49,27 +49,35 @@
   @media (max-width: 900px) { #app.com-lateral { grid-template-columns: minmax(0, 1fr); } }
 
   /* ===== CARTÕES ===== */
-  #ui, #hostinfo, #aviso, #barra, #config, #painel { background: var(--painel); border: 4px solid var(--borda); box-shadow: 6px 6px 0 var(--borda); padding: .9rem 1rem; margin-bottom: 1.2rem; }
-  #ui:empty, #hostinfo:empty, #aviso:empty, #barra:empty, #config:empty, #painel:empty { display: none; }
+  #ui, #salainfo, #config, #painel, #musica, #chat { background: var(--painel); border: 4px solid var(--borda); box-shadow: 6px 6px 0 var(--borda); padding: .9rem 1rem; margin-bottom: 1.2rem; }
+  #ui:empty, #salainfo:empty, #config:empty, #painel:empty, #musica:empty, #chat:empty { display: none; }
   #ui { text-align: center; }
-  #aviso { border-color: var(--alerta); color: var(--alerta); }
-  #hostinfo { display: flex; align-items: center; justify-content: center; gap: .7rem; }
+  #salainfo { display: flex; align-items: center; justify-content: center; gap: .7rem; flex-wrap: wrap; }
+  #salainfo .avatar { width: 34px; height: 34px; }
 
-  /* ===== TELA ===== */
-  .tela { position: relative; aspect-ratio: 16 / 9; background: #000; border: 4px solid var(--borda); box-shadow: 6px 6px 0 var(--borda); margin-bottom: 1.2rem; }
-  .tela video { display: none; position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
-  .tela.ativo video { display: block; }
-  #vazio { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 1rem; font-family: var(--pixel); font-size: var(--t-titulo); line-height: 1.6; color: #9aa0a8; animation: piscar 1.2s steps(2) infinite; }
-  .tela.ativo #vazio { display: none; }
+  /* ===== TELAS (uma por pessoa que está transmitindo) ===== */
+  #telas { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 1.2rem; margin-bottom: 1.2rem; }
+  .tela { position: relative; aspect-ratio: 16 / 9; background: #000; border: 4px solid var(--borda); box-shadow: 6px 6px 0 var(--borda); }
+  .tela video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+  .vazio-tela { grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; text-align: center; padding: 1rem; }
+  .vazio-txt { font-family: var(--pixel); font-size: var(--t-titulo); line-height: 1.6; color: #9aa0a8; animation: piscar 1.2s steps(2) infinite; }
 
-  /* tela cheia: o contêiner inteiro (e não só o <video>) fica em tela cheia, sem a barra nativa do navegador */
+  .tile-barra { display: flex; align-items: center; justify-content: space-between; gap: .6rem; flex-wrap: wrap; margin-top: .7rem; padding: .4rem .6rem; background: var(--painel); border: 3px solid var(--borda); }
+  .tile-quem { display: flex; align-items: center; gap: .5rem; min-width: 0; }
+  .tile-quem .avatar { width: 30px; height: 30px; }
+  .tile-tag { color: var(--alerta); font-size: var(--t-pequeno); }
+  .tile-ctl { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
+  .tile-ctl button { margin: 0; padding: .1rem .6rem; font-size: var(--t-pequeno); }
+  .tile-ctl input[type=range] { width: 80px; }
+
+  /* tela cheia: o quadro inteiro (e não só o <video>) fica em tela cheia, sem a barra nativa do navegador */
   .tela:fullscreen { aspect-ratio: auto; width: 100%; height: 100%; border: 0; box-shadow: none; margin: 0; }
   .tela:-webkit-full-screen { aspect-ratio: auto; width: 100%; height: 100%; border: 0; box-shadow: none; margin: 0; }
   .tela.parado { cursor: none; }
-  #ov-tela { position: absolute; left: 0; right: 0; bottom: 0; display: none; align-items: center; justify-content: center; gap: .6rem; flex-wrap: wrap; padding: 1rem; background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,.75)); transition: opacity .2s; }
-  .tela:fullscreen #ov-tela { display: flex; }
-  .tela:-webkit-full-screen #ov-tela { display: flex; }
-  #ov-tela.oculto { opacity: 0; pointer-events: none; }
+  .ov-tela { position: absolute; left: 0; right: 0; bottom: 0; display: none; align-items: center; justify-content: center; gap: .6rem; flex-wrap: wrap; padding: 1rem; background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,.75)); transition: opacity .2s; z-index: 3; }
+  .tela:fullscreen .ov-tela { display: flex; }
+  .tela:-webkit-full-screen .ov-tela { display: flex; }
+  .ov-tela.oculto { opacity: 0; pointer-events: none; }
 
   /* ===== BOTÕES E CAMPOS ===== */
   button, .btn-arquivo { font-family: var(--corpo); font-size: var(--t-corpo); text-transform: uppercase; padding: .3rem .9rem; color: var(--destaque-texto); background: var(--destaque); border: 3px solid var(--borda); box-shadow: 4px 4px 0 var(--borda); cursor: pointer; margin: .2rem; }
@@ -80,13 +88,15 @@
   button.perigo { background: var(--erro); color: #fff; }
   .btn-arquivo { display: inline-block; }
 
-  input[type=text], input:not([type]), select { font-family: var(--corpo); font-size: var(--t-corpo); background: var(--bg); color: var(--texto); border: 3px solid var(--borda); padding: .3rem .6rem; width: 90%; max-width: 480px; margin: .3rem 0; }
+  input[type=text], input[type=password], input:not([type]), select { font-family: var(--corpo); font-size: var(--t-corpo); background: var(--bg); color: var(--texto); border: 3px solid var(--borda); padding: .3rem .6rem; width: 90%; max-width: 480px; margin: .3rem 0; }
   select { width: auto; max-width: 100%; background: var(--painel2); }
   input[type=checkbox] { width: auto; accent-color: var(--destaque); transform: scale(1.4); margin-right: .5rem; }
   input[type=range] { accent-color: var(--destaque); }
   small { color: var(--suave); font-size: var(--t-pequeno); }
 
-  /* ===== PAINEL DE ESPECTADORES ===== */
+  .controles { display: flex; align-items: center; justify-content: center; gap: .5rem; flex-wrap: wrap; margin-top: .6rem; }
+
+  /* ===== LISTA DE PESSOAS ===== */
   .titulo { font-family: var(--pixel); font-size: var(--t-titulo); display: flex; justify-content: space-between; align-items: center; margin-bottom: .8rem; }
   #contador { display: inline-block; }
   #contador.pulso { animation: pulso .4s steps(4); }
@@ -94,6 +104,7 @@
   .pessoa { display: flex; align-items: center; gap: .7rem; padding: .4rem .5rem; background: var(--painel2); border: 3px solid var(--borda); margin: .5rem 0; max-height: 90px; overflow: hidden; }
   .pessoa.entra { animation: entra .45s steps(8) both; }
   .pessoa.sai { animation: sai .4s steps(6) both; }
+  .pessoa button { margin: 0 0 0 auto; padding: .1rem .5rem; font-size: var(--t-pequeno); }
   .avatar { width: 40px; height: 40px; object-fit: cover; flex: none; border: 3px solid var(--borda); image-rendering: pixelated; }
   .avatar.letra { background: var(--destaque); color: #fff; display: flex; align-items: center; justify-content: center; font-family: var(--pixel); font-size: var(--t-titulo); }
   .estado { font-size: var(--t-pequeno); color: var(--suave); display: flex; align-items: center; gap: .4rem; }
@@ -104,7 +115,6 @@
   .estado.live::before { background: var(--erro); animation: piscar 1s steps(2) infinite; }
 
   #preview .avatar { width: 80px; height: 80px; margin-bottom: .5rem; }
-  #hostinfo .avatar { width: 34px; height: 34px; }
 
   /* ===== CONFIGURAÇÃO DE SONS ===== */
   #config summary { cursor: pointer; font-family: var(--pixel); font-size: var(--t-titulo); }
@@ -112,18 +122,14 @@
   .cfg-linha > div:first-child { margin-bottom: .3rem; }
   .cfg-linha button, .cfg-linha .btn-arquivo { font-size: var(--t-pequeno); padding: .15rem .6rem; }
 
-  .controles { display: flex; align-items: center; justify-content: center; gap: .5rem; flex-wrap: wrap; }
-
   /* ===== CHAT ===== */
-  #chat { background: var(--painel); border: 4px solid var(--borda); box-shadow: 6px 6px 0 var(--borda); padding: .9rem 1rem; margin-bottom: 1.2rem; }
-  #chat:empty { display: none; }
   #msgs { height: 260px; overflow-y: auto; background: var(--bg); border: 3px solid var(--borda); padding: .4rem .5rem; margin-bottom: .6rem; }
   .msg { margin: .35rem 0; overflow-wrap: anywhere; animation: entra .3s steps(5) both; }
   .msg .quem { margin-right: .4rem; }
   .msg.sistema { color: var(--suave); }
   .msg img.desenho { display: block; max-width: 100%; margin-top: .3rem; border: 3px solid var(--borda); background: #fff; }
   .chat-form { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
-  .chat-form input { flex: 1 1 100%; min-width: 0; width: auto; max-width: none; margin: 0; } /* campo de texto ocupa a linha toda; os botões ficam embaixo */
+  .chat-form input { flex: 1 1 100%; min-width: 0; width: auto; max-width: none; margin: 0; }
   .chat-form button { margin: 0; padding: .3rem .6rem; }
   .pad { margin-top: .7rem; }
   .pad canvas { display: block; width: 100%; aspect-ratio: 8 / 5; background: #fff; border: 3px solid var(--borda); touch-action: none; cursor: crosshair; }
@@ -133,6 +139,15 @@
   button.cor:active { transform: none; }
   button.cor.sel { outline: 3px solid var(--destaque); outline-offset: 2px; }
   button.sel { background: var(--destaque); color: #fff; }
+
+  /* ===== MÚSICA (YouTube) E LINK DO DISCORD ===== */
+  .yt-wrap { position: relative; margin: .6rem 0; background: #000; border: 3px solid var(--borda); }
+  .yt-wrap iframe { display: block; width: 100%; }
+  .yt-bloqueio { position: absolute; inset: 0; z-index: 2; } /* impede de pausar o vídeo clicando nele */
+  .musica-ctl { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; margin-top: .5rem; }
+  .musica-ctl button { margin: 0; padding: .15rem .6rem; font-size: var(--t-pequeno); }
+  a.btn-link { font-family: var(--corpo); font-size: var(--t-pequeno); text-transform: uppercase; text-decoration: none; padding: .15rem .7rem; color: var(--destaque-texto); background: var(--destaque); border: 3px solid var(--borda); box-shadow: 4px 4px 0 var(--borda); }
+  a.btn-link:active { transform: translate(4px, 4px); box-shadow: none; }
 
   /* ===== AVISOS (TOASTS) ===== */
   #toasts { position: fixed; right: 1rem; bottom: 1rem; display: flex; flex-direction: column; gap: .6rem; z-index: 50; pointer-events: none; }
@@ -168,17 +183,13 @@
 <main id="app">
   <section id="palco">
     <div id="ui"></div>
-    <div id="hostinfo"></div>
-    <div id="aviso"></div>
-    <div class="tela" id="tela">
-      <video id="v" autoplay playsinline></video>
-      <div id="vazio">AGUARDANDO...</div>
-    </div>
-    <div id="barra"></div>
+    <div id="salainfo"></div>
+    <div id="telas"></div>
   </section>
   <aside id="lateral" hidden>
     <div id="config"></div>
     <div id="painel"></div>
+    <div id="musica"></div>
     <div id="chat"></div>
   </aside>
 </main>
@@ -187,9 +198,10 @@
 
 <script>
 // ===== CONFIGURAÇÕES =====
-const MAX_PESSOAS = 10;          // contando com quem transmite
+const MAX_PESSOAS = 10;          // contando com o dono da sala
+const MAX_TRANSMISSOES = 3;      // telas ao mesmo tempo (cada pessoa baixa todas elas)
 const BITRATE = 1500000;         // 1.5 Mbps por espectador (baixe se a sua internet for fraca)
-const INTERVALO_STATUS = 3000;   // espectador avisa o status a cada 3s
+const INTERVALO_STATUS = 3000;   // cada pessoa avisa o status a cada 3s
 const TEMPO_SEM_SINAL = 9000;    // se ficar 9s sem avisar, aparece "sem sinal"
 const TAMANHO_MAX_SOM = 1000000; // sons escolhidos do seu PC: máximo ~1 MB
 
@@ -203,21 +215,19 @@ const SONS_PRONTOS = [
   { nome: 'Vybor rezhima',   arquivo: 'vybor-rezhima.mp3' },
 ];
 
-const ui = document.getElementById('ui');
-const painel = document.getElementById('painel');
-const cfgBox = document.getElementById('config');
-const hostInfo = document.getElementById('hostinfo');
-const aviso = document.getElementById('aviso');
-const barra = document.getElementById('barra');
-const tela = document.getElementById('tela');
-const vazio = document.getElementById('vazio');
-const lateral = document.getElementById('lateral');
-const app = document.getElementById('app');
-const toasts = document.getElementById('toasts');
-const chatBox = document.getElementById('chat');
-const video = document.getElementById('v');
-const btnTema = document.getElementById('tema');
-const hostId = location.hash.slice(1); // se tiver #id na URL, é espectador
+const $ = id => document.getElementById(id);
+const ui = $('ui');
+const salaInfo = $('salainfo');
+const telas = $('telas');
+const lateral = $('lateral');
+const app = $('app');
+const painel = $('painel');
+const cfgBox = $('config');
+const musicaBox = $('musica');
+const chatBox = $('chat');
+const toasts = $('toasts');
+const btnTema = $('tema');
+const hostId = location.hash.slice(1); // se tiver #id na URL, a pessoa vai entrar numa sala; senão, vai criar uma
 
 // ===== FUNÇÕES AUXILIARES =====
 function lerSalvo(chave, padrao) {
@@ -240,12 +250,6 @@ function aplicarTema(t) {
 aplicarTema(lerSalvo('syt-tema', { tema: 'escuro' }).tema === 'claro' ? 'claro' : 'escuro');
 btnTema.onclick = () => aplicarTema(document.documentElement.dataset.tema === 'claro' ? 'escuro' : 'claro');
 
-// área do vídeo: mostra o vídeo ou o texto de espera
-function telaAtiva(on, textoVazio) {
-  tela.classList.toggle('ativo', on);
-  if (textoVazio) vazio.textContent = textoVazio;
-}
-
 // aviso no canto da tela (entrou/saiu)
 function toast(texto, tipo) {
   const t = document.createElement('div');
@@ -253,6 +257,20 @@ function toast(texto, tipo) {
   t.textContent = texto;
   toasts.appendChild(t);
   setTimeout(() => t.remove(), 3300);
+}
+
+function criarBotao(texto, classe) {
+  const b = document.createElement('button');
+  if (classe) b.className = classe;
+  b.textContent = texto;
+  return b;
+}
+function criarRange(valor, largura) {
+  const r = document.createElement('input');
+  r.type = 'range';
+  r.min = 0; r.max = 100; r.value = valor;
+  if (largura) r.style.width = largura;
+  return r;
 }
 
 // foto: corta no centro, reduz pra 96x96 e vira um JPEG pequeno (~4 KB)
@@ -279,6 +297,15 @@ function fotoValida(f) {
   return typeof f === 'string' && f.length < 30000 && /^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/.test(f);
 }
 
+// cada nome ganha sempre a mesma cor, escolhida de uma paleta fixa (igual no PC de todo mundo)
+const CORES_NOME = ['#e5534b', '#f0883e', '#d4a72c', '#2ea043', '#14b8a6', '#2f9de4', '#5865f2', '#a371f7', '#ec6cb9', '#a0705a'];
+function corNome(nome) {
+  const t = String(nome || '').trim().toLowerCase(); // maiúsculas/minúsculas não mudam a cor
+  let h = 0;
+  for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) >>> 0;
+  return CORES_NOME[h % CORES_NOME.length];
+}
+
 function criarAvatar(nome, foto) {
   if (fotoValida(foto)) {
     const img = document.createElement('img');
@@ -293,7 +320,7 @@ function criarAvatar(nome, foto) {
   return d;
 }
 
-// linha da lista de espectadores (criada uma vez e só atualizada depois, pra animação tocar só na entrada)
+// linha da lista de pessoas (criada uma vez e só atualizada depois, pra animação tocar só na entrada)
 function criarLinha() {
   const el = document.createElement('div');
   el.className = 'pessoa';
@@ -304,7 +331,7 @@ function criarLinha() {
   estadoEl.className = 'estado';
   info.append(nomeEl, estadoEl);
   el.append(avatarEl, info);
-  return { el: el, avatarEl: avatarEl, nomeEl: nomeEl, estadoEl: estadoEl, chave: null };
+  return { el: el, avatarEl: avatarEl, nomeEl: nomeEl, estadoEl: estadoEl, chave: null, btn: null };
 }
 function atualizarLinha(l, nome, foto, e, base) {
   base = base || nome; // nome usado pra cor e letra (sem o "(você)")
@@ -321,18 +348,20 @@ function atualizarLinha(l, nome, foto, e, base) {
   l.estadoEl.className = 'estado ' + e.classe;
 }
 
-// formulário de nome + foto (usado por quem transmite e por quem assiste)
-function formPerfil(chave, textoBotao, idBotao, dica) {
+// formulário de nome + foto (usado por quem cria a sala e por quem entra)
+function formPerfil(chave, textoBotao, idBotao, dica, rotuloSenha, rotuloDiscord) {
   const perfil = lerSalvo(chave, { nome: '', foto: null });
 
   ui.innerHTML = '<div id="preview"></div>' +
     '<input id="nome" placeholder="Seu nome" maxlength="20"><br>' +
     '<label class="btn-arquivo">Escolher foto (opcional)<input type="file" id="foto" accept="image/*" style="display:none"></label><br><br>' +
+    (rotuloSenha ? '<input type="password" id="senha" placeholder="' + rotuloSenha + '" maxlength="30" autocomplete="off"><br><br>' : '') +
+    (rotuloDiscord ? '<input id="discord" placeholder="' + rotuloDiscord + '" maxlength="150" autocomplete="off"><br><br>' : '') +
     '<button id="' + idBotao + '">' + textoBotao + '</button><br>' +
     '<small>' + dica + '</small>';
 
-  const nomeEl = document.getElementById('nome');
-  const prev = document.getElementById('preview');
+  const nomeEl = $('nome');
+  const prev = $('preview');
   nomeEl.value = perfil.nome || '';
 
   function mostrarPreview() {
@@ -341,7 +370,7 @@ function formPerfil(chave, textoBotao, idBotao, dica) {
   }
   mostrarPreview();
 
-  document.getElementById('foto').onchange = e => {
+  $('foto').onchange = e => {
     const f = e.target.files[0];
     if (!f) return;
     reduzirFoto(f).then(d => { perfil.foto = d; mostrarPreview(); })
@@ -356,19 +385,318 @@ function formPerfil(chave, textoBotao, idBotao, dica) {
   };
 }
 
+// só aceita convite ou link de canal do próprio Discord (evita link malicioso)
+function discordValido(l) {
+  return typeof l === 'string' && l.length < 150 &&
+    /^https:\/\/(discord\.gg\/[A-Za-z0-9-]{2,32}|(www\.)?discord\.com\/(invite\/[A-Za-z0-9-]{2,32}|channels\/\d{5,25}\/\d{5,25}))\/?$/.test(l);
+}
+
+function limitarBitrate(call) {
+  setTimeout(() => {
+    if (!call.peerConnection) return;
+    call.peerConnection.getSenders().forEach(s => {
+      if (s.track && s.track.kind === 'video') {
+        const p = s.getParameters();
+        if (!p.encodings || !p.encodings.length) p.encodings = [{}];
+        p.encodings[0].maxBitrate = BITRATE;
+        s.setParameters(p);
+      }
+    });
+  }, 1000);
+}
+
+// ===== TELAS: um quadro de vídeo por pessoa que está transmitindo =====
+const tiles = new Map(); // id -> { el, video, tag, limpar }
+const vazioEl = document.createElement('div');
+vazioEl.className = 'tela vazio-tela';
+const vazioTxt = document.createElement('div');
+vazioTxt.className = 'vazio-txt';
+vazioEl.appendChild(vazioTxt);
+telas.appendChild(vazioEl);
+function setVazio(txt) { vazioTxt.textContent = txt; }
+function atualizarVazio() { vazioEl.hidden = tiles.size > 0; }
+setVazio('AGUARDANDO...');
+
+function telaCheiaDe(elTela) {
+  return (document.fullscreenElement || document.webkitFullscreenElement) === elTela;
+}
+function alternarTelaCheia(elTela, video) {
+  if (document.fullscreenElement || document.webkitFullscreenElement) {
+    (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    return;
+  }
+  let r;
+  if (elTela.requestFullscreen) r = elTela.requestFullscreen();
+  else if (elTela.webkitRequestFullscreen) r = elTela.webkitRequestFullscreen();
+  else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen(); // iPhone
+  if (r && r.catch) r.catch(() => {});
+}
+
+function addTile(id, nome, foto, stream, souEu) {
+  const ex = tiles.get(id);
+  if (ex) { if (ex.video.srcObject !== stream) ex.video.srcObject = stream; return; }
+
+  const el = document.createElement('div');
+  el.className = 'tile';
+
+  const tela = document.createElement('div');
+  tela.className = 'tela';
+  const video = document.createElement('video');
+  video.autoplay = true;
+  video.playsInline = true;
+  video.muted = !!souEu; // a sua própria tela fica muda aqui (evita eco)
+  video.srcObject = stream;
+  tela.appendChild(video);
+  const ov = document.createElement('div');
+  ov.className = 'ov-tela';
+  tela.appendChild(ov);
+
+  const barra = document.createElement('div');
+  barra.className = 'tile-barra';
+  const quem = document.createElement('div');
+  quem.className = 'tile-quem';
+  const nomeEl = document.createElement('strong');
+  nomeEl.textContent = nome + (souEu ? ' (você)' : '');
+  nomeEl.style.color = corNome(nome);
+  const tag = document.createElement('span');
+  tag.className = 'tile-tag';
+  quem.append(criarAvatar(nome, foto), nomeEl, tag);
+  const ctl = document.createElement('div');
+  ctl.className = 'tile-ctl';
+  barra.append(quem, ctl);
+  el.append(tela, barra);
+
+  // controles: mutar e volume (só nas telas dos outros) e tela cheia
+  const bTela = criarBotao('Tela cheia', 'sec');
+  const ovTela = criarBotao('Sair da tela cheia', 'sec');
+  let bMudo = null, ovMudo = null, vol = null, ovVol = null;
+  function atualizarMudo() {
+    const t = video.muted ? 'Ativar som' : 'Mutar';
+    if (bMudo) { bMudo.textContent = t; ovMudo.textContent = t; }
+  }
+  if (!souEu) {
+    bMudo = criarBotao('Mutar', 'sec');
+    ovMudo = criarBotao('Mutar', 'sec');
+    vol = criarRange(100, '80px');
+    ovVol = criarRange(100, '130px');
+    const alternarMudo = () => { video.muted = !video.muted; atualizarMudo(); };
+    const ajustar = v => { video.volume = v / 100; vol.value = v; ovVol.value = v; };
+    bMudo.onclick = ovMudo.onclick = alternarMudo;
+    vol.oninput = e => ajustar(e.target.value);
+    ovVol.oninput = e => ajustar(e.target.value);
+    ctl.append(bMudo, vol);
+    ov.append(ovMudo, ovVol);
+  }
+  ctl.append(bTela);
+  ov.append(ovTela);
+
+  const alternar = () => alternarTelaCheia(tela, video);
+  bTela.onclick = ovTela.onclick = alternar;
+  video.ondblclick = alternar;
+
+  // os controles por cima do vídeo somem sozinhos depois de 3s sem mexer o mouse
+  let tOv;
+  function mostrarOverlay() {
+    ov.classList.remove('oculto');
+    tela.classList.remove('parado');
+    clearTimeout(tOv);
+    tOv = setTimeout(() => {
+      if (telaCheiaDe(tela)) { ov.classList.add('oculto'); tela.classList.add('parado'); }
+    }, 3000);
+  }
+  function aoMudarTelaCheia() {
+    const ativa = telaCheiaDe(tela);
+    bTela.textContent = ativa ? 'Sair da tela cheia' : 'Tela cheia';
+    if (ativa) mostrarOverlay();
+    else { clearTimeout(tOv); ov.classList.remove('oculto'); tela.classList.remove('parado'); }
+  }
+  document.addEventListener('fullscreenchange', aoMudarTelaCheia);
+  document.addEventListener('webkitfullscreenchange', aoMudarTelaCheia);
+  tela.addEventListener('mousemove', mostrarOverlay);
+  tela.addEventListener('touchstart', mostrarOverlay);
+
+  if (!souEu) {
+    // se o navegador bloquear o som automático, toca sem som (a pessoa liga depois)
+    const p = video.play();
+    if (p && p.catch) p.catch(() => { video.muted = true; atualizarMudo(); video.play().catch(() => {}); });
+    // transmissão ao vivo não faz sentido pausada: se pausar, volta a tocar
+    video.addEventListener('pause', () => { if (video.srcObject) video.play().catch(() => {}); });
+  }
+
+  telas.insertBefore(el, vazioEl);
+  tiles.set(id, {
+    el: el, video: video, tag: tag,
+    limpar: () => {
+      clearTimeout(tOv);
+      document.removeEventListener('fullscreenchange', aoMudarTelaCheia);
+      document.removeEventListener('webkitfullscreenchange', aoMudarTelaCheia);
+      if (telaCheiaDe(tela)) { try { (document.exitFullscreen || document.webkitExitFullscreen).call(document); } catch (e) {} }
+    }
+  });
+  atualizarVazio();
+}
+
+function removeTile(id) {
+  const t = tiles.get(id);
+  if (!t) return;
+  t.limpar();
+  t.video.srcObject = null;
+  t.el.remove();
+  tiles.delete(id);
+  atualizarVazio();
+}
+
+function setTileMudo(id, mudo) {
+  const t = tiles.get(id);
+  if (t) t.tag.textContent = mudo ? 'sem áudio' : '';
+}
+
+// ===== SONS DE AVISO (entrou/saiu), configuráveis por quem está usando =====
+function criarSons() {
+  let audioCtx = null;
+  try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+  let somLigado = true;
+  let cfgAberto = false;
+
+  // fonte: 'bipe', 'p0'...'p4' (sons prontos) ou 'custom' (arquivo escolhido do PC)
+  const config = lerSalvo('syt-sons', {
+    entrou: { fonte: 'p0', custom: null },
+    saiu:   { fonte: 'p3', custom: null },
+    volume: 0.6
+  });
+
+  function salvarConfig() {
+    if (!gravarSalvo('syt-sons', config)) {
+      alert('Não deu pra salvar pra próxima vez (arquivo grande demais pro navegador), mas vale nesta sessão.');
+    }
+  }
+
+  function beep(freq) {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.frequency.value = freq;
+    gain.gain.value = 0.15;
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.15);
+  }
+
+  // toca o som configurado pro evento ('entrou' ou 'saiu'); forcar = ignora o "mudo" (botão de teste)
+  function tocar(ev, forcar) {
+    if (!somLigado && !forcar) return;
+    const reserva = ev === 'entrou' ? 880 : 440;
+    const c = config[ev];
+    let src = null;
+    if (c.fonte === 'custom' && c.custom) src = c.custom.data;
+    else if (/^p\d+$/.test(c.fonte) && SONS_PRONTOS[+c.fonte.slice(1)]) src = SONS_PRONTOS[+c.fonte.slice(1)].arquivo;
+    if (!src) { beep(reserva); return; }
+    const a = new Audio(src);
+    a.volume = config.volume;
+    a.play().catch(() => beep(reserva)); // se der erro (arquivo não encontrado etc.), toca o bipe
+  }
+
+  function escolherArquivo(ev, file) {
+    if (!file) return;
+    if (file.size > TAMANHO_MAX_SOM) {
+      alert('Arquivo grande demais (máximo ~1 MB). Use um som curto.');
+      return;
+    }
+    const r = new FileReader();
+    r.onload = () => {
+      config[ev].custom = { nome: file.name, data: r.result };
+      config[ev].fonte = 'custom';
+      salvarConfig();
+      desenharConfig();
+    };
+    r.readAsDataURL(file);
+  }
+
+  function desenharConfig() {
+    cfgBox.innerHTML = '';
+    const det = document.createElement('details');
+    det.open = cfgAberto;
+    det.ontoggle = () => { cfgAberto = det.open; };
+    const sum = document.createElement('summary');
+    sum.textContent = 'Configurar sons';
+    det.appendChild(sum);
+
+    const linhaLiga = document.createElement('div');
+    linhaLiga.className = 'cfg-linha';
+    const lbl = document.createElement('label');
+    const chk = document.createElement('input');
+    chk.type = 'checkbox';
+    chk.checked = somLigado;
+    chk.onchange = () => { somLigado = chk.checked; };
+    lbl.append(chk, document.createTextNode('Som quando alguém entrar/sair'));
+    linhaLiga.appendChild(lbl);
+    det.appendChild(linhaLiga);
+
+    [['entrou', 'Quando alguém entra'], ['saiu', 'Quando alguém sai']].forEach(([ev, rotulo]) => {
+      const linha = document.createElement('div');
+      linha.className = 'cfg-linha';
+      const lab = document.createElement('div');
+      lab.textContent = rotulo;
+
+      const sel = document.createElement('select');
+      const ops = [['bipe', 'Bipe simples']];
+      SONS_PRONTOS.forEach((s, i) => ops.push(['p' + i, s.nome]));
+      if (config[ev].custom) ops.push(['custom', 'Arquivo: ' + config[ev].custom.nome]);
+      ops.forEach(([valor, texto]) => {
+        const o = document.createElement('option');
+        o.value = valor;
+        o.textContent = texto;
+        sel.appendChild(o);
+      });
+      sel.value = config[ev].fonte;
+      sel.onchange = () => { config[ev].fonte = sel.value; salvarConfig(); };
+
+      const arq = document.createElement('label');
+      arq.className = 'btn-arquivo';
+      arq.textContent = 'Escolher arquivo';
+      const inp = document.createElement('input');
+      inp.type = 'file';
+      inp.accept = 'audio/*';
+      inp.style.display = 'none';
+      inp.onchange = () => escolherArquivo(ev, inp.files[0]);
+      arq.appendChild(inp);
+
+      const teste = criarBotao('Testar', 'sec');
+      teste.onclick = () => tocar(ev, true);
+
+      linha.append(lab, sel, document.createTextNode(' '), arq, document.createTextNode(' '), teste);
+      det.appendChild(linha);
+    });
+
+    const vl = document.createElement('div');
+    vl.className = 'cfg-linha';
+    vl.appendChild(document.createTextNode('Volume: '));
+    const rng = criarRange(Math.round(config.volume * 100), '60%');
+    rng.onchange = () => { config.volume = rng.value / 100; salvarConfig(); };
+    vl.appendChild(rng);
+    det.appendChild(vl);
+
+    const rest = criarBotao('Restaurar padrão', 'sec');
+    rest.onclick = () => {
+      config.entrou = { fonte: 'p0', custom: null };
+      config.saiu = { fonte: 'p3', custom: null };
+      config.volume = 0.6;
+      salvarConfig();
+      desenharConfig();
+    };
+    det.appendChild(rest);
+
+    cfgBox.appendChild(det);
+  }
+
+  return { tocar: tocar, desenharConfig: desenharConfig };
+}
+
 // ===== CHAT (texto e desenho) =====
 // só aceita desenho pequeno em PNG/JPEG
 function imgValida(s) {
   return typeof s === 'string' && s.length < 100000 && /^data:image\/(png|jpeg);base64,[A-Za-z0-9+\/=]+$/.test(s);
-}
-
-// cada nome ganha sempre a mesma cor, escolhida de uma paleta fixa (igual no PC de todo mundo)
-const CORES_NOME = ['#e5534b', '#f0883e', '#d4a72c', '#2ea043', '#14b8a6', '#2f9de4', '#5865f2', '#a371f7', '#ec6cb9', '#a0705a'];
-function corNome(nome) {
-  const t = String(nome || '').trim().toLowerCase(); // maiúsculas/minúsculas não mudam a cor
-  let h = 0;
-  for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) >>> 0;
-  return CORES_NOME[h % CORES_NOME.length];
 }
 
 // monta o chat dentro de #chat. enviar(obj) manda { texto } ou { img }. Devolve { receber(msg) }.
@@ -388,11 +716,8 @@ function montarChat(enviar) {
   const inp = document.createElement('input');
   inp.placeholder = 'Mensagem...';
   inp.maxLength = 200;
-  const bEnviar = document.createElement('button');
-  bEnviar.textContent = 'Enviar';
-  const bDesenhar = document.createElement('button');
-  bDesenhar.className = 'sec';
-  bDesenhar.textContent = 'Desenhar';
+  const bEnviar = criarBotao('Enviar');
+  const bDesenhar = criarBotao('Desenhar', 'sec');
   form.append(inp, bEnviar, bDesenhar);
 
   function enviarTexto() {
@@ -415,7 +740,7 @@ function montarChat(enviar) {
   function limpar() { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cv.width, cv.height); }
   limpar();
 
-  let cor = '#111214', tam = 4, desenhando = false, ultimo = null;
+  let cor = '#111214', tam = 5, desenhando = false, ultimo = null;
 
   function pos(e) {
     const r = cv.getBoundingClientRect();
@@ -467,9 +792,7 @@ function montarChat(enviar) {
   });
   const botoesTam = [];
   [['P', 2], ['M', 5], ['G', 12]].forEach(([rotulo, t]) => {
-    const b = document.createElement('button');
-    b.className = 'sec' + (t === 5 ? ' sel' : '');
-    b.textContent = rotulo;
+    const b = criarBotao(rotulo, 'sec' + (t === 5 ? ' sel' : ''));
     b.onclick = () => {
       tam = t;
       botoesTam.forEach(x => x.classList.remove('sel'));
@@ -478,13 +801,9 @@ function montarChat(enviar) {
     botoesTam.push(b);
     ferr.appendChild(b);
   });
-  tam = 5;
-  const bLimpar = document.createElement('button');
-  bLimpar.className = 'sec';
-  bLimpar.textContent = 'Limpar';
+  const bLimpar = criarBotao('Limpar', 'sec');
   bLimpar.onclick = limpar;
-  const bEnvDes = document.createElement('button');
-  bEnvDes.textContent = 'Enviar desenho';
+  const bEnvDes = criarBotao('Enviar desenho');
   bEnvDes.onclick = () => {
     let img = cv.toDataURL('image/png');
     if (!imgValida(img)) img = cv.toDataURL('image/jpeg', 0.6); // se o PNG ficou pesado, tenta JPEG
@@ -534,542 +853,932 @@ function montarChat(enviar) {
   return { receber: receber };
 }
 
-if (hostId) modoEspectador(); else modoTransmissor();
+// ===== MÚSICA (YouTube, ouvir junto) =====
+const REGEX_YT_ID = /^[A-Za-z0-9_-]{11}$/;
 
-// ===== QUEM TRANSMITE =====
-function modoTransmissor() {
-  telaAtiva(false, 'AGUARDANDO TRANSMISSÃO...');
-  const confirmar = formPerfil('syt-perfil-host', 'Começar a transmitir', 'go',
-    'Os espectadores vão ver seu nome e sua foto.');
-
-  document.getElementById('go').onclick = async () => {
-    const perfil = confirmar('Anônimo');
-
-    let stream;
-    try {
-      stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { frameRate: 30 },
-        audio: true
-      });
-    } catch (e) {
-      return; // cancelou a escolha da tela
+// tira o ID do vídeo de um link do YouTube (youtube.com, youtu.be, music.youtube.com, shorts)
+function ytId(link) {
+  let u;
+  try { u = new URL(String(link).trim()); } catch (e) { return null; }
+  const h = u.hostname.replace(/^www\./, '');
+  let id = null;
+  if (h === 'youtu.be') {
+    id = u.pathname.slice(1).split('/')[0];
+  } else if (h === 'youtube.com' || h === 'm.youtube.com' || h === 'music.youtube.com') {
+    if (u.pathname === '/watch') {
+      id = u.searchParams.get('v');
+    } else {
+      const m = u.pathname.match(/^\/(shorts|embed|live)\/([^\/]+)/);
+      if (m) id = m[2];
     }
-    video.srcObject = stream;
-    video.muted = true; // evita eco da sua própria transmissão
-    telaAtiva(true);
-    lateral.hidden = false;
-    app.classList.add('com-lateral');
+  }
+  return id && REGEX_YT_ID.test(id) ? id : null;
+}
 
-    // ----- sons de aviso (entrou/saiu) -----
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    let somLigado = true;
-    let cfgAberto = false;
+// carrega o player do YouTube só quando precisa
+let ytPromessa = null;
+function carregarYT() {
+  if (ytPromessa) return ytPromessa;
+  ytPromessa = new Promise(resolve => {
+    if (window.YT && window.YT.Player) { resolve(); return; }
+    window.onYouTubeIframeAPIReady = resolve;
+    const sc = document.createElement('script');
+    sc.src = 'https://www.youtube.com/iframe_api';
+    document.head.appendChild(sc);
+  });
+  return ytPromessa;
+}
 
-    // fonte: 'bipe', 'p0'...'p4' (sons prontos) ou 'custom' (arquivo escolhido do PC)
-    const config = lerSalvo('syt-sons', {
-      entrou: { fonte: 'p0', custom: null },
-      saiu:   { fonte: 'p3', custom: null },
-      volume: 0.6
-    });
+// quem controla a música: tem o campo do link, o player com controles e manda o estado pra todo mundo
+function montarMusicaControle(enviar, inicial) {
+  const titulo = document.createElement('div');
+  titulo.className = 'titulo';
+  titulo.textContent = 'Música (você controla)';
 
-    function salvarConfig() {
-      if (!gravarSalvo('syt-sons', config)) {
-        alert('Não deu pra salvar pra próxima vez (arquivo grande demais pro navegador), mas vale nesta sessão.');
+  const linha = document.createElement('div');
+  linha.className = 'chat-form';
+  const inp = document.createElement('input');
+  inp.placeholder = 'Cole o link do YouTube';
+  inp.maxLength = 200;
+  const bTocar = criarBotao('Tocar');
+  const bParar = criarBotao('Parar', 'sec');
+  linha.append(inp, bTocar, bParar);
+
+  const wrap = document.createElement('div');
+  wrap.className = 'yt-wrap';
+  wrap.hidden = true;
+  wrap.innerHTML = '<div id="ytplayer"></div>';
+
+  const dica = document.createElement('small');
+  dica.textContent = 'Todo mundo ouve junto com você. Se estiver compartilhando o áudio do sistema, mute o áudio da sua transmissão pra ninguém ouvir em dobro.';
+
+  musicaBox.append(titulo, linha, wrap, dica);
+
+  let player = null, idAtual = null, tocando = false, destruido = false;
+
+  function estado() {
+    let t = 0;
+    try { if (player && player.getCurrentTime) t = player.getCurrentTime() || 0; } catch (e) {}
+    return { tipo: 'yt', id: idAtual, t: t, tocando: tocando };
+  }
+  function enviarEstado() { enviar(estado()); }
+
+  function aoMudar(e) {
+    const st = e.data;
+    if (st === 1) tocando = true;                      // tocando
+    else if (st === 2 || st === 0) tocando = false;    // pausado ou terminou
+    else return;
+    enviarEstado();
+  }
+
+  function tocarLink() {
+    const id = ytId(inp.value);
+    if (!id) { alert('Link do YouTube inválido. Cole o link de um vídeo.'); return; }
+    carregarYT().then(() => {
+      if (destruido) return;
+      wrap.hidden = false;
+      idAtual = id;
+      tocando = true;
+      if (!player) {
+        player = new YT.Player('ytplayer', {
+          width: '100%', height: '180', videoId: id,
+          playerVars: { autoplay: 1, playsinline: 1, rel: 0 },
+          events: { onReady: e => e.target.playVideo(), onStateChange: aoMudar }
+        });
+      } else {
+        player.loadVideoById(id);
       }
-    }
+      enviarEstado();
+    });
+  }
 
-    function beep(freq) {
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.frequency.value = freq;
-      gain.gain.value = 0.15;
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.15);
-    }
+  function pararMusica() {
+    if (player) { try { player.destroy(); } catch (e) {} player = null; }
+    idAtual = null;
+    tocando = false;
+    wrap.hidden = true;
+    wrap.innerHTML = '<div id="ytplayer"></div>';
+    enviarEstado();
+  }
 
-    // toca o som configurado pro evento ('entrou' ou 'saiu'); forcar = ignora o "mudo" (botão de teste)
-    function tocar(ev, forcar) {
-      if (!somLigado && !forcar) return;
-      const reserva = ev === 'entrou' ? 880 : 440;
-      const c = config[ev];
-      let src = null;
-      if (c.fonte === 'custom' && c.custom) src = c.custom.data;
-      else if (/^p\d+$/.test(c.fonte) && SONS_PRONTOS[+c.fonte.slice(1)]) src = SONS_PRONTOS[+c.fonte.slice(1)].arquivo;
-      if (!src) { beep(reserva); return; }
-      const a = new Audio(src);
-      a.volume = config.volume;
-      a.play().catch(() => beep(reserva)); // se der erro (arquivo não encontrado etc.), toca o bipe
-    }
+  bTocar.onclick = tocarLink;
+  inp.onkeydown = e => { if (e.key === 'Enter') tocarLink(); };
+  bParar.onclick = pararMusica;
 
-    function escolherArquivo(ev, file) {
-      if (!file) return;
-      if (file.size > TAMANHO_MAX_SOM) {
-        alert('Arquivo grande demais (máximo ~1 MB). Use um som curto.');
+  // se virou controlador com uma música já tocando, continua de onde estava
+  if (inicial && inicial.id) {
+    const t0 = inicial.tocando ? inicial.t + (Date.now() - inicial.quando) / 1000 : inicial.t;
+    carregarYT().then(() => {
+      if (destruido) return;
+      wrap.hidden = false;
+      idAtual = inicial.id;
+      tocando = inicial.tocando;
+      player = new YT.Player('ytplayer', {
+        width: '100%', height: '180', videoId: inicial.id,
+        playerVars: { autoplay: inicial.tocando ? 1 : 0, playsinline: 1, rel: 0, start: Math.floor(t0) },
+        events: { onReady: e => { if (inicial.tocando) e.target.playVideo(); }, onStateChange: aoMudar }
+      });
+    });
+  }
+
+  // a cada 4s manda o tempo atual, assim quem ficou pra trás (ou você pulou a música) se acerta sozinho
+  const tick = setInterval(() => { if (idAtual) enviarEstado(); }, 4000);
+
+  return {
+    estado: estado,
+    receber: () => {},
+    destruir: () => {
+      destruido = true;
+      clearInterval(tick);
+      if (player) { try { player.destroy(); } catch (e) {} player = null; }
+    }
+  };
+}
+
+// todo o resto da sala: segue quem controla (não dá pra pausar nem trocar de vídeo)
+function montarMusicaSeguir(inicial) {
+  const titulo = document.createElement('div');
+  titulo.className = 'titulo';
+  titulo.textContent = 'Música (YouTube)';
+  const status = document.createElement('div');
+  status.style.color = 'var(--suave)';
+  status.textContent = 'Nenhuma música tocando.';
+
+  const wrap = document.createElement('div');
+  wrap.className = 'yt-wrap';
+  wrap.hidden = true;
+  function recriarAlvo() { wrap.innerHTML = '<div id="ytplayerv"></div><div class="yt-bloqueio"></div>'; }
+  recriarAlvo();
+
+  const ctl = document.createElement('div');
+  ctl.className = 'musica-ctl';
+  ctl.hidden = true;
+  const bSinc = criarBotao('Sincronizar');
+  const bMudo = criarBotao('Mutar música', 'sec');
+  const vol = criarRange(100, '90px');
+  ctl.append(bSinc, bMudo, vol);
+
+  const dica = document.createElement('small');
+  dica.textContent = 'Quem está transmitindo controla a música.';
+
+  musicaBox.append(titulo, status, wrap, ctl, dica);
+
+  let player = null, pronto = false, idAtual = null, ultimo = null, destruido = false;
+
+  // onde o controlador deve estar agora (o tempo que ele mandou + o que passou desde então)
+  function tempoAtual() {
+    return ultimo.tocando ? ultimo.t + (Date.now() - ultimo.quando) / 1000 : ultimo.t;
+  }
+
+  function limpar() {
+    if (player) { try { player.destroy(); } catch (e) {} }
+    player = null; pronto = false; idAtual = null;
+    recriarAlvo();
+    wrap.hidden = true;
+    ctl.hidden = true;
+    status.textContent = 'Nenhuma música tocando.';
+  }
+
+  function ajustar() {
+    if (!player || !pronto || !ultimo || !ultimo.id) return;
+    if (ultimo.id !== idAtual) { // trocou de vídeo
+      idAtual = ultimo.id;
+      if (ultimo.tocando) player.loadVideoById({ videoId: ultimo.id, startSeconds: tempoAtual() });
+      else player.cueVideoById({ videoId: ultimo.id, startSeconds: ultimo.t });
+      return;
+    }
+    const st = player.getPlayerState();
+    const alvo = tempoAtual();
+    if (Math.abs(player.getCurrentTime() - alvo) > 2.5) player.seekTo(alvo, true);
+    if (ultimo.tocando && st !== 1 && st !== 3) player.playVideo();
+    if (!ultimo.tocando && st === 1) player.pauseVideo();
+  }
+
+  function aplicar() {
+    if (!ultimo) return;
+    if (!ultimo.id) { limpar(); return; }
+    wrap.hidden = false;
+    ctl.hidden = false;
+    status.textContent = ultimo.tocando ? 'Tocando junto com a sala.' : 'Pausado.';
+    carregarYT().then(() => {
+      if (destruido || !ultimo || !ultimo.id) return;
+      if (!player) {
+        idAtual = ultimo.id;
+        player = new YT.Player('ytplayerv', {
+          width: '100%', height: '180', videoId: ultimo.id,
+          playerVars: { controls: 0, disablekb: 1, playsinline: 1, rel: 0, autoplay: ultimo.tocando ? 1 : 0, start: Math.floor(tempoAtual()) },
+          events: { onReady: () => { pronto = true; ajustar(); } }
+        });
         return;
       }
-      const r = new FileReader();
-      r.onload = () => {
-        config[ev].custom = { nome: file.name, data: r.result };
-        config[ev].fonte = 'custom';
-        salvarConfig();
-        desenharConfig();
-      };
-      r.readAsDataURL(file);
+      ajustar();
+    });
+  }
+
+  // recebe um estado já conferido: { id, t, tocando, quando }
+  function receber(est) {
+    ultimo = est;
+    aplicar();
+  }
+
+  // se o navegador bloqueou o som automático, esse botão (um clique seu) libera e acerta o tempo
+  bSinc.onclick = () => {
+    if (!player || !pronto || !ultimo || !ultimo.id) return;
+    player.seekTo(tempoAtual(), true);
+    if (ultimo.tocando) player.playVideo();
+  };
+  bMudo.onclick = () => {
+    if (!player || !pronto) return;
+    if (player.isMuted()) { player.unMute(); bMudo.textContent = 'Mutar música'; }
+    else { player.mute(); bMudo.textContent = 'Ativar música'; }
+  };
+  vol.oninput = () => { if (player && pronto) player.setVolume(+vol.value); };
+
+  if (inicial && inicial.id) receber(inicial);
+
+  return {
+    receber: receber,
+    destruir: () => {
+      destruido = true;
+      if (player) { try { player.destroy(); } catch (e) {} }
+      player = null;
     }
+  };
+}
 
-    function desenharConfig() {
-      cfgBox.innerHTML = '';
-      const det = document.createElement('details');
-      det.open = cfgAberto;
-      det.ontoggle = () => { cfgAberto = det.open; };
-      const sum = document.createElement('summary');
-      sum.textContent = 'Configurar sons';
-      det.appendChild(sum);
+// gerencia o cartão de música: quem controla vê o painel de controle, os outros só seguem
+function criarMusica(enviar) {
+  let atual = null, controla = null, ultimo = null; // ultimo: { id, t, tocando, quando }
 
-      [['entrou', 'Quando alguém entra'], ['saiu', 'Quando alguém sai']].forEach(([ev, rotulo]) => {
-        const linha = document.createElement('div');
-        linha.className = 'cfg-linha';
-        const lab = document.createElement('div');
-        lab.textContent = rotulo;
+  function normalizar(m) {
+    const id = (m && typeof m.id === 'string' && REGEX_YT_ID.test(m.id)) ? m.id : null;
+    const t = Math.max(0, Math.min(Number(m && m.t) || 0, 100000));
+    return { id: id, t: t, tocando: !!(m && m.tocando), quando: Date.now() };
+  }
 
-        const sel = document.createElement('select');
-        const ops = [['bipe', 'Bipe simples']];
-        SONS_PRONTOS.forEach((s, i) => ops.push(['p' + i, s.nome]));
-        if (config[ev].custom) ops.push(['custom', 'Arquivo: ' + config[ev].custom.nome]);
-        ops.forEach(([valor, texto]) => {
-          const o = document.createElement('option');
-          o.value = valor;
-          o.textContent = texto;
-          sel.appendChild(o);
-        });
-        sel.value = config[ev].fonte;
-        sel.onchange = () => { config[ev].fonte = sel.value; salvarConfig(); };
-
-        const arq = document.createElement('label');
-        arq.className = 'btn-arquivo';
-        arq.textContent = 'Escolher arquivo';
-        const inp = document.createElement('input');
-        inp.type = 'file';
-        inp.accept = 'audio/*';
-        inp.style.display = 'none';
-        inp.onchange = () => escolherArquivo(ev, inp.files[0]);
-        arq.appendChild(inp);
-
-        const teste = document.createElement('button');
-        teste.className = 'sec';
-        teste.textContent = 'Testar';
-        teste.onclick = () => tocar(ev, true);
-
-        linha.append(lab, sel, document.createTextNode(' '), arq, document.createTextNode(' '), teste);
-        det.appendChild(linha);
-      });
-
-      const vl = document.createElement('div');
-      vl.className = 'cfg-linha';
-      vl.appendChild(document.createTextNode('Volume: '));
-      const rng = document.createElement('input');
-      rng.type = 'range';
-      rng.min = 0; rng.max = 100;
-      rng.value = Math.round(config.volume * 100);
-      rng.style.width = '60%';
-      rng.onchange = () => { config.volume = rng.value / 100; salvarConfig(); };
-      vl.appendChild(rng);
-      det.appendChild(vl);
-
-      const rest = document.createElement('button');
-      rest.className = 'sec';
-      rest.textContent = 'Restaurar padrão';
-      rest.onclick = () => {
-        config.entrou = { fonte: 'p0', custom: null };
-        config.saiu = { fonte: 'p3', custom: null };
-        config.volume = 0.6;
-        salvarConfig();
-        desenharConfig();
-      };
-      det.appendChild(rest);
-
-      cfgBox.appendChild(det);
+  function montar(sou) {
+    if (atual) {
+      // se estava controlando, guarda onde parou pra continuar como seguidor
+      if (controla) {
+        const e = atual.estado();
+        if (e.id) ultimo = { id: e.id, t: e.t, tocando: e.tocando, quando: Date.now() };
+      }
+      atual.destruir();
     }
+    musicaBox.innerHTML = '';
+    controla = sou;
+    atual = sou ? montarMusicaControle(enviar, ultimo) : montarMusicaSeguir(ultimo);
+  }
 
-    // ----- painel de espectadores -----
+  return {
+    receber(m) {
+      ultimo = normalizar(m);
+      if (atual && !controla) atual.receber(ultimo);
+    },
+    definirControlador(sou) {
+      sou = !!sou;
+      if (atual && controla === sou) return;
+      montar(sou);
+    },
+    destruir() {
+      if (atual) atual.destruir();
+      atual = null;
+      musicaBox.innerHTML = '';
+    }
+  };
+}
+
+// ===== A SALA =====
+// Quem cria a sala (o "dono") coordena tudo: senha, lista de pessoas, chat, quem está transmitindo.
+// Cada pessoa que transmite manda a própria tela direto pras outras.
+function iniciarSala(op) {
+  const souDono = !!op.souDono;
+  const perfil = op.perfil;
+  const eu = { id: null, nome: perfil.nome, foto: fotoValida(perfil.foto) ? perfil.foto : null };
+  const sons = criarSons();
+  const peer = new Peer();
+  const podeCapturar = !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
+
+  let conn = null;              // conexão com o dono (quando você não é o dono)
+  let encerrado = false;
+  let minhaTx = null;           // { stream, calls, mudo } quando você está transmitindo
+  let chat = null;
+  let dono = null;
+  let controladorMusica = null; // quem controla a música agora
+  let statusTimer = null, hubTimer = null;
+
+  const pessoas = new Map();       // id -> { nome, foto, cod }  (cod: 0 ok, 1 aba em 2º plano, 2 sem sinal)
+  const transmissores = new Map(); // id -> { nome, mudo }
+  const pendentes = new Map();     // chamadas que chegaram antes do aviso do dono
+  const musica = criarMusica(msg => enviarAoHub(msg));
+
+  // elementos da lista de pessoas e dos botões
+  let painelPronto = false, contador = null, lista = null;
+  const linhas = new Map();
+  let bTx = null, bMudoTx = null;
+
+  // ---------- falar com o dono ----------
+  function enviarAoHub(msg) {
+    if (encerrado) return;
+    if (souDono) { if (eu.id) hubReceber(eu.id, msg); }
+    else if (conn && conn.open) { try { conn.send(msg); } catch (e) {} }
+  }
+
+  // ---------- encerrar ----------
+  function sair(msg) {
+    if (encerrado) return;
+    encerrado = true;
+    clearInterval(statusTimer);
+    clearInterval(hubTimer);
+    if (minhaTx) {
+      minhaTx.calls.forEach(c => { try { c.close(); } catch (e) {} });
+      minhaTx.stream.getTracks().forEach(t => t.stop());
+      minhaTx = null;
+    }
+    pendentes.forEach(c => { try { c.close(); } catch (e) {} });
+    [...tiles.keys()].forEach(removeTile);
+    try { peer.destroy(); } catch (e) {}
+    musica.destruir();
+    chatBox.innerHTML = '';
     painel.innerHTML = '';
-    const tituloEl = document.createElement('div');
-    tituloEl.className = 'titulo';
-    const tituloTxt = document.createElement('span');
-    tituloTxt.textContent = 'Na sala';
-    const contador = document.createElement('span');
+    cfgBox.innerHTML = '';
+    salaInfo.innerHTML = '';
+    lateral.hidden = true;
+    app.classList.remove('com-lateral');
+    setVazio('FIM');
+    atualizarVazio();
+    ui.innerHTML = msg + '<br><button onclick="location.reload()">' + (souDono ? 'Criar nova sala' : 'Entrar de novo') + '</button>';
+  }
+
+  // ---------- interface da sala ----------
+  function mostrarSalaInfo(d, discord) {
+    salaInfo.innerHTML = '';
+    const t = document.createElement('span');
+    t.textContent = 'Sala de:';
+    const n = document.createElement('strong');
+    n.textContent = String(d.nome || 'Anônimo').slice(0, 20);
+    n.style.color = corNome(n.textContent);
+    salaInfo.append(t, criarAvatar(n.textContent, fotoValida(d.foto) ? d.foto : null), n);
+    if (discordValido(discord)) { // botão pra entrar na call do Discord
+      const a = document.createElement('a');
+      a.className = 'btn-link';
+      a.href = discord;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.textContent = 'Entrar na call do Discord';
+      salaInfo.appendChild(a);
+    }
+  }
+
+  function montarBarra() {
+    ui.innerHTML = '';
+    if (souDono) {
+      const info = document.createElement('div');
+      info.appendChild(document.createTextNode('Mande este link pros amigos:'));
+      info.appendChild(document.createElement('br'));
+      const inp = document.createElement('input');
+      inp.readOnly = true;
+      inp.value = location.href.split('#')[0] + '#' + peer.id;
+      inp.onclick = () => inp.select();
+      info.appendChild(inp);
+      if (op.senha) {
+        const s = document.createElement('small');
+        s.textContent = 'Sala protegida por senha.';
+        info.append(document.createElement('br'), s);
+      }
+      ui.appendChild(info);
+    }
+    const linha = document.createElement('div');
+    linha.className = 'controles';
+    bTx = criarBotao('Transmitir minha tela');
+    bMudoTx = criarBotao('Mutar meu áudio', 'sec');
+    bMudoTx.hidden = true;
+    const bSair = criarBotao(souDono ? 'Encerrar sala' : 'Sair da sala', 'perigo');
+    linha.append(bTx, bMudoTx, bSair);
+    ui.appendChild(linha);
+
+    bTx.onclick = () => { if (minhaTx) pararMinhaTx(true); else iniciarMinhaTx(); };
+    bMudoTx.onclick = alternarMeuMudo;
+    bSair.onclick = () => {
+      if (souDono && !confirm('Encerrar a sala? Todo mundo será desconectado.')) return;
+      sair(souDono ? 'Sala encerrada.' : 'Você saiu.');
+    };
+    atualizarBotoes();
+  }
+
+  function atualizarBotoes() {
+    if (!bTx) return;
+    if (!podeCapturar) {
+      bTx.disabled = true;
+      bTx.textContent = 'Transmitir (só no computador)';
+    } else {
+      bTx.textContent = minhaTx ? 'Parar minha transmissão' : 'Transmitir minha tela';
+      bTx.className = minhaTx ? 'perigo' : '';
+    }
+    bMudoTx.hidden = !minhaTx;
+    if (minhaTx) {
+      const sem = !minhaTx.stream.getAudioTracks().length;
+      bMudoTx.disabled = sem;
+      bMudoTx.textContent = sem ? 'Sem áudio compartilhado' : (minhaTx.mudo ? 'Reativar meu áudio' : 'Mutar meu áudio');
+    }
+  }
+
+  function montarPainel() {
+    painel.innerHTML = '';
+    const titulo = document.createElement('div');
+    titulo.className = 'titulo';
+    const tt = document.createElement('span');
+    tt.textContent = 'Na sala';
+    contador = document.createElement('span');
     contador.id = 'contador';
-    tituloEl.append(tituloTxt, contador);
-    const lista = document.createElement('div');
-    painel.append(tituloEl, lista);
+    titulo.append(tt, contador);
+    lista = document.createElement('div');
+    painel.append(titulo, lista);
+    painelPronto = true;
+  }
 
-    const linhas = new Map(); // id -> linha da lista
-    const linhaEu = criarLinha();
-    lista.appendChild(linhaEu.el);
-    atualizarLinha(linhaEu, perfil.nome + ' (você)', perfil.foto, { texto: 'transmitindo', classe: 'live' }, perfil.nome);
+  function estadoDe(id, pp) {
+    if (transmissores.has(id)) return { texto: 'transmitindo', classe: 'live' };
+    if (pp.cod === 2) return { texto: 'sem sinal', classe: 'sem' };
+    if (pp.cod === 1) return { texto: 'aba em segundo plano', classe: 'dorme' };
+    return { texto: 'na sala', classe: 'ok' };
+  }
 
-    function pulsar() {
+  function painelRender() {
+    if (!painelPronto || encerrado) return;
+    const txt = pessoas.size + '/' + MAX_PESSOAS;
+    if (contador.textContent !== txt) {
+      contador.textContent = txt;
       contador.classList.remove('pulso');
       void contador.offsetWidth; // reinicia a animação
       contador.classList.add('pulso');
     }
+    pessoas.forEach((pp, id) => {
+      let l = linhas.get(id);
+      if (!l) { // pessoa nova: cria a linha com animação de entrada
+        l = criarLinha();
+        l.el.classList.add('entra');
+        if (souDono && id !== eu.id) { // o dono pode parar a transmissão de outra pessoa
+          l.btn = criarBotao('Parar', 'sec');
+          l.btn.hidden = true;
+          l.btn.onclick = () => hubForcarParar(id);
+          l.el.appendChild(l.btn);
+        }
+        lista.appendChild(l.el);
+        linhas.set(id, l);
+      }
+      const nomeTxt = pp.nome + (id === eu.id ? ' (você)' : '') + (dono && id === dono.id ? ' (dono)' : '');
+      atualizarLinha(l, nomeTxt, pp.foto, estadoDe(id, pp), pp.nome);
+      if (l.btn) l.btn.hidden = !transmissores.has(id);
+    });
+    linhas.forEach((l, id) => { // pessoa saiu: animação de saída e remove
+      if (!pessoas.has(id)) {
+        l.el.classList.remove('entra');
+        l.el.classList.add('sai');
+        setTimeout(() => l.el.remove(), 450);
+        linhas.delete(id);
+      }
+    });
+  }
 
-    // ----- conexão -----
-    const peer = new Peer();
-    const viewers = new Map(); // id -> { conn, nome, foto, visivel, ultimo }
-    let timer;
-    let encerrado = false;
-    let mudo = false; // áudio da transmissão silenciado pra todo mundo
+  function montarSala() {
+    lateral.hidden = false;
+    app.classList.add('com-lateral');
+    chat = montarChat(obj => enviarAoHub(Object.assign({ tipo: 'chat' }, obj)));
+    montarPainel();
+    sons.desenharConfig();
+    montarBarra();
+    setVazio('NINGUÉM TRANSMITINDO');
+    atualizarVazio();
+  }
 
-    // ----- chat: tudo passa por aqui e é repassado pra todo mundo -----
-    const chat = montarChat(obj => transmitir(Object.assign({ tipo: 'msg', nome: perfil.nome }, obj)));
-    function transmitir(m) {
-      viewers.forEach(v => { try { v.conn.send(m); } catch (e) {} });
-      chat.receber(m);
+  // ---------- transmitir a sua tela ----------
+  async function iniciarMinhaTx() {
+    if (minhaTx || encerrado) return;
+    if (!podeCapturar) {
+      alert('Este navegador não consegue compartilhar a tela (celulares não conseguem). Pra transmitir, use um computador. Pra assistir, o celular funciona.');
+      return;
     }
-
-    // liga/desliga o áudio que vai pros espectadores
-    function alternarMudo() {
-      const faixas = stream.getAudioTracks();
-      if (!faixas.length) return;
-      mudo = !mudo;
-      faixas.forEach(t => { t.enabled = !mudo; });
-      atualizarBotaoMudo();
-      viewers.forEach(v => {
-        try { v.conn.send({ tipo: 'mudo', mudo: mudo }); } catch (e) {}
-      });
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: true });
+    } catch (e) {
+      return; // cancelou a escolha da tela
     }
+    if (encerrado) { stream.getTracks().forEach(t => t.stop()); return; }
+    minhaTx = { stream: stream, calls: new Map(), mudo: false };
+    // se você clicar em "Parar compartilhamento" na barra do navegador, também encerra
+    stream.getVideoTracks()[0].onended = () => pararMinhaTx(true);
+    addTile(eu.id, eu.nome, eu.foto, stream, true);
+    atualizarBotoes();
+    enviarAoHub({ tipo: 'tx-quero' });
+  }
 
-    function atualizarBotaoMudo() {
-      const b = document.getElementById('mutar');
-      if (!b) return;
-      if (!stream.getAudioTracks().length) {
-        b.disabled = true;
-        b.textContent = 'Sem áudio compartilhado';
+  function pararMinhaTx(avisar) {
+    if (!minhaTx) return;
+    const tx = minhaTx;
+    minhaTx = null;
+    tx.calls.forEach(c => { try { c.close(); } catch (e) {} });
+    tx.stream.getTracks().forEach(t => t.stop());
+    removeTile(eu.id);
+    atualizarBotoes();
+    if (avisar) enviarAoHub({ tipo: 'tx-parar' });
+  }
+
+  // liga/desliga o áudio da SUA transmissão pra todo mundo
+  function alternarMeuMudo() {
+    if (!minhaTx) return;
+    const faixas = minhaTx.stream.getAudioTracks();
+    if (!faixas.length) return;
+    minhaTx.mudo = !minhaTx.mudo;
+    faixas.forEach(t => { t.enabled = !minhaTx.mudo; });
+    setTileMudo(eu.id, minhaTx.mudo);
+    atualizarBotoes();
+    enviarAoHub({ tipo: 'tx-mudo', mudo: minhaTx.mudo });
+  }
+
+  // manda a sua tela pra uma pessoa
+  function ligarPara(id) {
+    if (!minhaTx || id === eu.id || minhaTx.calls.has(id)) return;
+    const call = peer.call(id, minhaTx.stream);
+    limitarBitrate(call);
+    minhaTx.calls.set(id, call);
+    call.on('close', () => { if (minhaTx) minhaTx.calls.delete(id); });
+  }
+
+  // ---------- receber a tela de quem transmite ----------
+  function aceitarChamada(call) {
+    call.answer(); // não manda nada de volta, só recebe
+    call.on('stream', s => {
+      if (encerrado) return;
+      const t = transmissores.get(call.peer);
+      const pp = pessoas.get(call.peer);
+      addTile(call.peer, t ? t.nome : (pp ? pp.nome : 'Alguém'), pp ? pp.foto : null, s, false);
+      if (t && t.mudo) setTileMudo(call.peer, true);
+    });
+    call.on('close', () => removeTile(call.peer));
+  }
+
+  peer.on('call', call => {
+    if (transmissores.has(call.peer)) { aceitarChamada(call); return; }
+    // ainda não sabemos que essa pessoa transmite: espera o aviso do dono (até 8s)
+    pendentes.set(call.peer, call);
+    setTimeout(() => {
+      if (pendentes.get(call.peer) === call) { pendentes.delete(call.peer); try { call.close(); } catch (e) {} }
+    }, 8000);
+  });
+
+  // ---------- mensagens que chegam do dono ----------
+  function aoReceberDoHub(d) {
+    if (!d || encerrado) return;
+    switch (d.tipo) {
+      case 'entrada': {
+        eu.id = d.voce;
+        dono = { id: d.dono.id, nome: String(d.dono.nome || 'Anônimo').slice(0, 20), foto: fotoValida(d.dono.foto) ? d.dono.foto : null };
+        pessoas.clear();
+        (d.participantes || []).forEach(x => {
+          pessoas.set(x.id, { nome: String(x.nome || 'Alguém').slice(0, 20), foto: fotoValida(x.foto) ? x.foto : null, cod: 0 });
+        });
+        transmissores.clear();
+        (d.transmissoes || []).forEach(x => {
+          transmissores.set(x.id, { nome: String(x.nome || 'Alguém').slice(0, 20), mudo: !!x.mudo });
+        });
+        controladorMusica = d.controlador || null;
+        montarSala();
+        mostrarSalaInfo(dono, d.discord);
+        painelRender();
+        if (d.musica) musica.receber(d.musica);
+        musica.definirControlador(controladorMusica === eu.id);
+        break;
+      }
+      case 'p-entrou': {
+        const nome = String(d.nome || 'Alguém').slice(0, 20);
+        pessoas.set(d.id, { nome: nome, foto: fotoValida(d.foto) ? d.foto : null, cod: 0 });
+        sons.tocar('entrou');
+        toast(nome + ' entrou', 'entrou');
+        painelRender();
+        break;
+      }
+      case 'p-saiu': {
+        const pp = pessoas.get(d.id);
+        pessoas.delete(d.id);
+        transmissores.delete(d.id);
+        if (d.id !== eu.id) removeTile(d.id);
+        const c = pendentes.get(d.id);
+        if (c) { pendentes.delete(d.id); try { c.close(); } catch (e) {} }
+        if (pp) { sons.tocar('saiu'); toast(pp.nome + ' saiu', 'saiu'); }
+        painelRender();
+        break;
+      }
+      case 'estados': {
+        const e = d.e || {};
+        pessoas.forEach((pp, id) => { if (typeof e[id] === 'number') pp.cod = e[id]; });
+        painelRender();
+        break;
+      }
+      case 'msg':
+        if (chat) chat.receber(d);
+        break;
+      case 'tx-inicio': {
+        transmissores.set(d.id, { nome: String(d.nome || 'Alguém').slice(0, 20), mudo: false });
+        const c = pendentes.get(d.id);
+        if (c) { pendentes.delete(d.id); aceitarChamada(c); }
+        painelRender();
+        break;
+      }
+      case 'tx-fim':
+        transmissores.delete(d.id);
+        if (d.id === eu.id) { if (minhaTx) pararMinhaTx(false); }
+        else removeTile(d.id);
+        painelRender();
+        break;
+      case 'tx-mudo': {
+        const t = transmissores.get(d.id);
+        if (t) t.mudo = !!d.mudo;
+        setTileMudo(d.id, !!d.mudo);
+        break;
+      }
+      case 'tx-ok': // o dono liberou: manda a sua tela pra todo mundo que já está na sala
+        (d.alvos || []).forEach(ligarPara);
+        break;
+      case 'tx-negado':
+        alert(String(d.motivo || 'Não foi possível transmitir agora.'));
+        pararMinhaTx(false);
+        break;
+      case 'chamar': // alguém novo entrou na sala: manda a sua tela pra ele também
+        if (minhaTx) ligarPara(d.id);
+        break;
+      case 'tx-forcar-parar':
+        if (minhaTx) { toast('O dono parou a sua transmissão', 'saiu'); pararMinhaTx(true); }
+        break;
+      case 'musica-dono':
+        controladorMusica = d.id || null;
+        musica.definirControlador(controladorMusica === eu.id);
+        break;
+      case 'yt':
+        musica.receber(d);
+        break;
+    }
+  }
+
+  // =====================================================
+  // ===== SÓ O DONO: coordena a sala =====
+  // =====================================================
+  const participantes = new Map();    // id -> { conn, nome, foto, visivel, ultimo, ultimaMsg }
+  const transmissoesHub = new Map();  // id -> { nome, mudo, desde }
+  let musicaEstado = null;            // último estado da música (pra quem entra depois)
+
+  function enviarPara(id, msg) {
+    const p = participantes.get(id);
+    if (!p) return;
+    if (id === eu.id) aoReceberDoHub(msg); // o dono recebe direto, sem rede
+    else { try { p.conn.send(msg); } catch (e) {} }
+  }
+
+  function difundir(msg, exceto) {
+    [...participantes.keys()].forEach(id => { if (id !== exceto) enviarPara(id, msg); });
+  }
+
+  function listaPessoas() {
+    return [...participantes].map(([id, p]) => ({ id: id, nome: p.nome, foto: p.foto }));
+  }
+
+  function hubEntrar(c, d) {
+    const id = c.peer;
+    const p = {
+      conn: c,
+      nome: String(d.nome || 'Alguém').slice(0, 20),
+      foto: fotoValida(d.foto) ? d.foto : null,
+      visivel: true, ultimo: Date.now(), ultimaMsg: 0
+    };
+    participantes.set(id, p);
+    enviarPara(id, {
+      tipo: 'entrada', voce: id,
+      dono: { id: eu.id, nome: eu.nome, foto: eu.foto },
+      discord: op.discordLink || '',
+      participantes: listaPessoas(),
+      transmissoes: [...transmissoesHub].map(([tid, t]) => ({ id: tid, nome: t.nome, mudo: t.mudo })),
+      controlador: controladorMusica,
+      musica: musicaEstado
+    });
+    difundir({ tipo: 'p-entrou', id: id, nome: p.nome, foto: p.foto }, id);
+    difundir({ tipo: 'msg', sistema: true, texto: p.nome + ' entrou' });
+    // quem já está transmitindo manda a tela pra pessoa nova
+    transmissoesHub.forEach((t, bid) => enviarPara(bid, { tipo: 'chamar', id: id }));
+  }
+
+  function hubSair(id) {
+    const p = participantes.get(id);
+    if (!p) return;
+    participantes.delete(id);
+    pararTxHub(id);
+    difundir({ tipo: 'p-saiu', id: id });
+    difundir({ tipo: 'msg', sistema: true, texto: p.nome + ' saiu' });
+  }
+
+  function pararTxHub(id) {
+    if (!transmissoesHub.delete(id)) return;
+    const p = participantes.get(id);
+    difundir({ tipo: 'tx-fim', id: id });
+    if (p) difundir({ tipo: 'msg', sistema: true, texto: p.nome + ' parou de transmitir' });
+    atualizarControladorMusica();
+  }
+
+  function hubForcarParar(id) {
+    if (!transmissoesHub.has(id)) return;
+    enviarPara(id, { tipo: 'tx-forcar-parar' });
+    pararTxHub(id);
+  }
+
+  // quem controla a música: quem está transmitindo há mais tempo
+  function atualizarControladorMusica() {
+    let melhor = null, desde = Infinity;
+    transmissoesHub.forEach((t, id) => { if (t.desde < desde) { desde = t.desde; melhor = id; } });
+    if (melhor !== controladorMusica) {
+      controladorMusica = melhor;
+      difundir({ tipo: 'musica-dono', id: melhor });
+    }
+  }
+
+  function hubReceber(id, d) {
+    const p = participantes.get(id);
+    if (!p || !d) return;
+    p.ultimo = Date.now();
+
+    if (d.tipo === 'status') {
+      p.visivel = !!d.visivel;
+    } else if (d.tipo === 'chat') {
+      // o nome vem do que o dono já registrou (ninguém consegue se passar por outra pessoa)
+      const agora = Date.now();
+      if (agora - p.ultimaMsg < 400) return; // anti-flood
+      p.ultimaMsg = agora;
+      const m = { tipo: 'msg', nome: p.nome };
+      if (typeof d.texto === 'string' && d.texto.trim()) m.texto = d.texto.trim().slice(0, 200);
+      else if (imgValida(d.img)) m.img = d.img;
+      else return;
+      difundir(m);
+    } else if (d.tipo === 'tx-quero') {
+      if (transmissoesHub.has(id)) return;
+      if (transmissoesHub.size >= MAX_TRANSMISSOES) {
+        enviarPara(id, { tipo: 'tx-negado', motivo: 'Já tem ' + MAX_TRANSMISSOES + ' transmissões ao mesmo tempo.' });
         return;
       }
-      b.textContent = mudo ? 'Reativar áudio' : 'Mutar áudio da transmissão';
+      transmissoesHub.set(id, { nome: p.nome, mudo: false, desde: Date.now() });
+      difundir({ tipo: 'tx-inicio', id: id, nome: p.nome });
+      enviarPara(id, { tipo: 'tx-ok', alvos: [...participantes.keys()].filter(x => x !== id) });
+      difundir({ tipo: 'msg', sistema: true, texto: p.nome + ' começou a transmitir' });
+      atualizarControladorMusica();
+    } else if (d.tipo === 'tx-parar') {
+      pararTxHub(id);
+    } else if (d.tipo === 'tx-mudo') {
+      const t = transmissoesHub.get(id);
+      if (t) { t.mudo = !!d.mudo; difundir({ tipo: 'tx-mudo', id: id, mudo: t.mudo }, id); }
+    } else if (d.tipo === 'yt') {
+      if (id !== controladorMusica) return; // só quem controla a música pode mexer nela
+      const e = {
+        tipo: 'yt',
+        id: (typeof d.id === 'string' && REGEX_YT_ID.test(d.id)) ? d.id : null,
+        t: Math.max(0, Math.min(Number(d.t) || 0, 100000)),
+        tocando: !!d.tocando
+      };
+      musicaEstado = e;
+      difundir(e, id);
     }
+  }
 
-    // encerra tudo: para de capturar a tela, desconecta os amigos e limpa a página
-    function parar() {
-      if (encerrado) return;
-      encerrado = true;
-      clearInterval(timer);
-      stream.getTracks().forEach(t => t.stop());
-      peer.destroy();
-      viewers.clear();
-      linhas.clear();
-      video.srcObject = null;
-      painel.innerHTML = '';
-      cfgBox.innerHTML = '';
-      chatBox.innerHTML = '';
-      lateral.hidden = true;
-      app.classList.remove('com-lateral');
-      telaAtiva(false, 'TRANSMISSÃO ENCERRADA');
-      ui.innerHTML = 'Transmissão encerrada.<br><button onclick="location.reload()">Começar de novo</button>';
-    }
-    // se você clicar em "Parar compartilhamento" na barra do navegador, também encerra
-    stream.getVideoTracks()[0].onended = parar;
-
-    peer.on('open', id => {
-      const link = location.href.split('#')[0] + '#' + id;
-      ui.innerHTML = 'Mande este link pros amigos:<br><input readonly value="' + link + '" onclick="this.select()">' +
-        '<br><label><input type="checkbox" id="som" checked> Som de aviso quando alguém entrar/sair</label>' +
-        '<br><br><button id="mutar" class="sec">Mutar áudio da transmissão</button>' +
-        '<button id="parar" class="perigo">Parar transmissão</button>';
-      document.getElementById('som').onchange = e => { somLigado = e.target.checked; };
-      document.getElementById('mutar').onclick = alternarMudo;
-      document.getElementById('parar').onclick = parar;
-      atualizarBotaoMudo();
-      desenharConfig();
+  // a cada 3s: atualiza quem está com aba em segundo plano ou sem sinal
+  function hubTick() {
+    const e = {};
+    participantes.forEach((p, id) => {
+      if (id === eu.id) { p.visivel = !document.hidden; p.ultimo = Date.now(); }
+      e[id] = (Date.now() - p.ultimo > TEMPO_SEM_SINAL) ? 2 : (p.visivel ? 0 : 1);
     });
+    difundir({ tipo: 'estados', e: e });
+  }
 
-    // um espectador entrou: liga pra ele mandando a tela
-    peer.on('connection', conn => {
-      let call = null;
+  // alguém tentou entrar: só entra depois de mandar o "oi" (com a senha certa, se a sala tiver)
+  peer.on('connection', c => {
+    if (!souDono) { c.close(); return; }
+    let autenticado = false;
+    const prazo = setTimeout(() => { if (!autenticado) c.close(); }, 10000); // quem não se identifica em 10s é desconectado
 
-      conn.on('open', () => {
-        if (viewers.size >= MAX_PESSOAS - 1) {
-          conn.send({ tipo: 'cheio' });
-          setTimeout(() => conn.close(), 500);
+    c.on('data', d => {
+      if (!d || encerrado) return;
+      if (!autenticado) {
+        if (d.tipo !== 'oi') return; // antes de entrar, só o "oi" é aceito
+        if (op.senha && d.senha !== op.senha) {
+          // senha errada: espera 1s (atrapalha quem tenta adivinhar) e desconecta
+          setTimeout(() => {
+            try { c.send({ tipo: 'senhaErrada' }); } catch (e) {}
+            setTimeout(() => c.close(), 300);
+          }, 1000);
           return;
         }
-        viewers.set(conn.peer, { conn: conn, nome: 'Alguém', foto: null, visivel: true, ultimo: Date.now() });
-        call = peer.call(conn.peer, stream);
-        limitarBitrate(call);
-        render();
-      });
-
-      conn.on('data', d => {
-        const v = viewers.get(conn.peer);
-        if (!v || !d) return;
-        v.ultimo = Date.now();
-        if (d.tipo === 'oi') {
-          v.nome = String(d.nome || 'Alguém').slice(0, 20);
-          v.foto = fotoValida(d.foto) ? d.foto : null;
-          // responde com quem está transmitindo e se o áudio está mutado
-          conn.send({ tipo: 'host', nome: perfil.nome, foto: perfil.foto, mudo: mudo });
-          toast(v.nome + ' entrou', 'entrou');
-          tocar('entrou');
-          transmitir({ tipo: 'msg', sistema: true, texto: v.nome + ' entrou' });
-        } else if (d.tipo === 'status') {
-          v.visivel = !!d.visivel;
-        } else if (d.tipo === 'chat') {
-          // o nome vem do que o transmissor já registrou (ninguém consegue se passar por outra pessoa)
-          const agora = Date.now();
-          if (agora - (v.ultimaMsg || 0) < 400) return; // anti-flood
-          v.ultimaMsg = agora;
-          const m = { tipo: 'msg', nome: v.nome };
-          if (typeof d.texto === 'string' && d.texto.trim()) m.texto = d.texto.trim().slice(0, 200);
-          else if (imgValida(d.img)) m.img = d.img;
-          else return;
-          transmitir(m);
+        if (participantes.size >= MAX_PESSOAS) {
+          c.send({ tipo: 'cheio' });
+          setTimeout(() => c.close(), 500);
+          return;
         }
-        render();
-      });
-
-      conn.on('close', () => {
-        const v = viewers.get(conn.peer);
-        if (v && viewers.delete(conn.peer)) {
-          toast(v.nome + ' saiu', 'saiu');
-          tocar('saiu');
-          transmitir({ tipo: 'msg', sistema: true, texto: v.nome + ' saiu' });
-        }
-        if (call) call.close();
-        render();
-      });
+        autenticado = true;
+        clearTimeout(prazo);
+        hubEntrar(c, d);
+        return;
+      }
+      hubReceber(c.peer, d);
     });
 
-    function estado(v) {
-      if (Date.now() - v.ultimo > TEMPO_SEM_SINAL) return { texto: 'sem sinal', classe: 'sem' };
-      if (!v.visivel) return { texto: 'aba em segundo plano', classe: 'dorme' };
-      return { texto: 'assistindo', classe: 'ok' };
+    c.on('close', () => { clearTimeout(prazo); hubSair(c.peer); });
+  });
+
+  // ---------- começar ----------
+  peer.on('open', id => {
+    eu.id = id;
+    if (souDono) {
+      participantes.set(id, { conn: null, nome: eu.nome, foto: eu.foto, visivel: true, ultimo: Date.now(), ultimaMsg: 0 });
+      hubTimer = setInterval(hubTick, 3000);
+      // o dono "entra" na própria sala sem passar pela rede
+      aoReceberDoHub({
+        tipo: 'entrada', voce: id,
+        dono: { id: id, nome: eu.nome, foto: eu.foto },
+        discord: op.discordLink || '',
+        participantes: listaPessoas(), transmissoes: [], controlador: null, musica: null
+      });
+      return;
     }
 
-    function render() {
-      if (encerrado) return;
-      const txt = viewers.size + '/' + (MAX_PESSOAS - 1);
-      if (contador.textContent !== txt) { contador.textContent = txt; pulsar(); }
+    conn = peer.connect(op.hostId);
+    conn.on('open', () => {
+      conn.send({ tipo: 'oi', nome: eu.nome, foto: eu.foto, senha: op.senha || '' });
+      function enviarStatus() {
+        if (encerrado || !conn.open) return;
+        conn.send({ tipo: 'status', visivel: !document.hidden });
+      }
+      statusTimer = setInterval(enviarStatus, INTERVALO_STATUS);
+      document.addEventListener('visibilitychange', enviarStatus);
+    });
+    conn.on('data', d => {
+      if (!d) return;
+      if (d.tipo === 'cheio') sair('A sala está cheia.');
+      else if (d.tipo === 'senhaErrada') {
+        try { sessionStorage.removeItem('syt-senha'); } catch (e) {}
+        sair('Senha incorreta.');
+      }
+      else aoReceberDoHub(d);
+    });
+    // se o dono fechar a sala ou cair, avisa
+    conn.on('close', () => sair('A sala foi encerrada.'));
+  });
 
-      viewers.forEach((v, id) => {
-        let l = linhas.get(id);
-        if (!l) { // pessoa nova: cria a linha com animação de entrada
-          l = criarLinha();
-          l.el.classList.add('entra');
-          lista.appendChild(l.el);
-          linhas.set(id, l);
-        }
-        atualizarLinha(l, v.nome, v.foto, estado(v));
-      });
+  peer.on('error', err => {
+    if (encerrado || !err) return;
+    if (err.type === 'peer-unavailable') sair('Sala não encontrada. Peça um link novo pro dono.');
+    else if (err.type === 'network' || err.type === 'server-error' || err.type === 'socket-error') sair('Erro de conexão. Tente de novo.');
+  });
+}
 
-      linhas.forEach((l, id) => { // pessoa saiu: animação de saída e remove
-        if (!viewers.has(id)) {
-          l.el.classList.remove('entra');
-          l.el.classList.add('sai');
-          setTimeout(() => l.el.remove(), 450);
-          linhas.delete(id);
-        }
-      });
+// ===== ENTRADA: criar sala ou entrar numa sala =====
+function modoDono() {
+  setVazio('AGUARDANDO...');
+  const confirmar = formPerfil('syt-perfil', 'Criar sala', 'go',
+    'Você cria a sala e qualquer pessoa nela pode transmitir a tela. Com senha, só entra quem souber.',
+    'Senha da sala (opcional)', 'Link da call do Discord (opcional)');
+  $('discord').value = lerSalvo('syt-discord', { link: '' }).link || '';
+
+  $('go').onclick = () => {
+    const perfil = confirmar('Anônimo');
+    const senha = ($('senha').value || '').slice(0, 30); // fica só na memória, não é salva
+    const discordLink = ($('discord').value || '').trim();
+    if (discordLink && !discordValido(discordLink)) {
+      alert('Link do Discord inválido. Use um convite (discord.gg/... ou discord.com/invite/...) ou o link do canal de voz.');
+      return;
     }
-
-    render();
-    timer = setInterval(render, 2000); // atualiza o "sem sinal" mesmo se ninguém mandar nada
+    gravarSalvo('syt-discord', { link: discordLink });
+    ui.textContent = 'Criando sala...';
+    iniciarSala({ souDono: true, perfil: perfil, senha: senha, discordLink: discordLink });
   };
 }
 
-function limitarBitrate(call) {
-  setTimeout(() => {
-    call.peerConnection.getSenders().forEach(s => {
-      if (s.track && s.track.kind === 'video') {
-        const p = s.getParameters();
-        if (!p.encodings || !p.encodings.length) p.encodings = [{}];
-        p.encodings[0].maxBitrate = BITRATE;
-        s.setParameters(p);
-      }
-    });
-  }, 1000);
-}
+function modoParticipante() {
+  setVazio('ENTRE NA SALA');
+  const confirmar = formPerfil('syt-perfil', 'Entrar na sala', 'join',
+    'Todo mundo na sala vê seu nome, sua foto e se você está com a aba aberta.',
+    'Senha da sala (se tiver)');
+  try { // se você já digitou a senha nesta aba, ela volta preenchida
+    const sv = sessionStorage.getItem('syt-senha');
+    if (sv) $('senha').value = sv;
+  } catch (e) {}
 
-// ===== QUEM ASSISTE =====
-function modoEspectador() {
-  telaAtiva(false, 'ENTRE PARA ASSISTIR');
-  const confirmar = formPerfil('syt-perfil', 'Assistir', 'join',
-    'Quem transmite vê seu nome, sua foto e se você está com a aba aberta.');
-
-  document.getElementById('join').onclick = () => {
+  $('join').onclick = () => {
     const perfil = confirmar('Alguém');
-
+    const senha = ($('senha').value || '').slice(0, 30);
+    try { sessionStorage.setItem('syt-senha', senha); } catch (e) {}
     ui.textContent = 'Conectando...';
-    telaAtiva(false, 'CONECTANDO...');
-    const peer = new Peer();
-    let statusTimer;
-    let saiu = false;
-    let montado = false;
-    let chat = null;
-
-    // sai da transmissão: desconecta e mostra um botão pra entrar de novo
-    function sair(msg) {
-      if (saiu) return;
-      saiu = true;
-      clearInterval(statusTimer);
-      peer.destroy();
-      video.srcObject = null;
-      hostInfo.innerHTML = '';
-      aviso.textContent = '';
-      barra.innerHTML = '';
-      const ovx = document.getElementById('ov-tela');
-      if (ovx) ovx.remove();
-      if (document.fullscreenElement || document.webkitFullscreenElement) {
-        try { (document.exitFullscreen || document.webkitExitFullscreen).call(document); } catch (e) {}
-      }
-      chatBox.innerHTML = '';
-      lateral.hidden = true;
-      app.classList.remove('com-lateral');
-      telaAtiva(false, 'FIM DA TRANSMISSÃO');
-      ui.innerHTML = msg + '<br><button onclick="location.reload()">Entrar de novo</button>';
-    }
-
-    // botões do espectador: mutar (só pra ele), volume, tela cheia e sair
-    function montarControles() {
-      ui.innerHTML = '';
-      barra.innerHTML = '<div class="controles">' +
-        '<button id="btnMudo" class="sec">Mutar</button>' +
-        '<input type="range" id="vol" min="0" max="100" value="100" style="width:130px">' +
-        '<button id="btnTela" class="sec">Tela cheia</button>' +
-        '<button id="sair" class="perigo">Sair</button>' +
-        '</div>';
-
-      // controles que aparecem por cima do vídeo quando está em tela cheia
-      const ov = document.createElement('div');
-      ov.id = 'ov-tela';
-      ov.innerHTML = '<button id="ovMudo" class="sec">Mutar</button>' +
-        '<input type="range" id="ovVol" min="0" max="100" value="100" style="width:130px">' +
-        '<button id="ovTela" class="sec">Sair da tela cheia</button>';
-      tela.appendChild(ov);
-
-      const btnMudo = document.getElementById('btnMudo');
-      const ovMudo = document.getElementById('ovMudo');
-      const vol = document.getElementById('vol');
-      const ovVol = document.getElementById('ovVol');
-      const btnTela = document.getElementById('btnTela');
-      let tOv;
-
-      function atualizarMudo() {
-        const t = video.muted ? 'Ativar som' : 'Mutar';
-        btnMudo.textContent = t;
-        ovMudo.textContent = t;
-      }
-      function alternarMudo() { video.muted = !video.muted; atualizarMudo(); }
-      function ajustarVolume(v) { video.volume = v / 100; vol.value = v; ovVol.value = v; }
-
-      function telaCheiaAtiva() {
-        return (document.fullscreenElement || document.webkitFullscreenElement) === tela;
-      }
-      function alternarTelaCheia() {
-        if (document.fullscreenElement || document.webkitFullscreenElement) {
-          (document.exitFullscreen || document.webkitExitFullscreen).call(document);
-          return;
-        }
-        let r;
-        if (tela.requestFullscreen) r = tela.requestFullscreen();
-        else if (tela.webkitRequestFullscreen) r = tela.webkitRequestFullscreen();
-        else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen(); // iPhone
-        if (r && r.catch) r.catch(() => {});
-      }
-
-      // os controles por cima do vídeo somem sozinhos depois de 3s sem mexer o mouse
-      function mostrarOverlay() {
-        ov.classList.remove('oculto');
-        tela.classList.remove('parado');
-        clearTimeout(tOv);
-        tOv = setTimeout(() => {
-          if (telaCheiaAtiva()) { ov.classList.add('oculto'); tela.classList.add('parado'); }
-        }, 3000);
-      }
-      function aoMudarTelaCheia() {
-        const ativa = telaCheiaAtiva();
-        btnTela.textContent = ativa ? 'Sair da tela cheia' : 'Tela cheia';
-        if (ativa) mostrarOverlay();
-        else { clearTimeout(tOv); ov.classList.remove('oculto'); tela.classList.remove('parado'); }
-      }
-      document.addEventListener('fullscreenchange', aoMudarTelaCheia);
-      document.addEventListener('webkitfullscreenchange', aoMudarTelaCheia);
-      tela.addEventListener('mousemove', mostrarOverlay);
-      tela.addEventListener('touchstart', mostrarOverlay);
-
-      btnMudo.onclick = ovMudo.onclick = alternarMudo;
-      vol.oninput = e => ajustarVolume(e.target.value);
-      ovVol.oninput = e => ajustarVolume(e.target.value);
-      btnTela.onclick = document.getElementById('ovTela').onclick = alternarTelaCheia;
-      video.ondblclick = alternarTelaCheia; // clique duplo no vídeo também entra/sai
-      document.getElementById('sair').onclick = () => sair('Você saiu.');
-    }
-
-    function mostrarHost(d) {
-      hostInfo.innerHTML = '';
-      const t = document.createElement('span');
-      t.textContent = 'Transmitindo:';
-      const n = document.createElement('strong');
-      n.textContent = String(d.nome || 'Anônimo').slice(0, 20);
-      n.style.color = corNome(n.textContent);
-      hostInfo.append(t, criarAvatar(d.nome, d.foto), n);
-    }
-
-    function mostrarMudo(mudo) {
-      aviso.textContent = mudo ? 'O transmissor silenciou o áudio da transmissão.' : '';
-    }
-
-    peer.on('call', call => {
-      call.answer(); // não manda nada de volta, só recebe
-      call.on('stream', s => {
-        if (saiu) return;
-        video.srcObject = s;
-        telaAtiva(true);
-        if (!montado) { montado = true; montarControles(); }
-      });
-    });
-
-    // transmissão ao vivo não faz sentido pausada: se pausar, volta a tocar
-    video.addEventListener('pause', () => {
-      if (!saiu && video.srcObject) video.play().catch(() => {});
-    });
-
-    peer.on('open', () => {
-      const conn = peer.connect(hostId);
-
-      conn.on('open', () => {
-        conn.send({ tipo: 'oi', nome: perfil.nome, foto: fotoValida(perfil.foto) ? perfil.foto : null });
-
-        // chat: o que você digita/desenha vai pro transmissor, que repassa pra todo mundo
-        chat = montarChat(obj => { if (conn.open) conn.send(Object.assign({ tipo: 'chat' }, obj)); });
-        lateral.hidden = false;
-        app.classList.add('com-lateral');
-
-        function enviarStatus() {
-          if (saiu || !conn.open) return;
-          conn.send({ tipo: 'status', visivel: !document.hidden });
-        }
-        enviarStatus();
-        statusTimer = setInterval(enviarStatus, INTERVALO_STATUS);
-        document.addEventListener('visibilitychange', enviarStatus);
-      });
-
-      conn.on('data', d => {
-        if (!d) return;
-        if (d.tipo === 'cheio') sair('A sala está cheia.');
-        else if (d.tipo === 'host') { mostrarHost(d); mostrarMudo(!!d.mudo); }
-        else if (d.tipo === 'mudo') mostrarMudo(!!d.mudo);
-        else if (d.tipo === 'msg' && chat) chat.receber(d);
-      });
-
-      // se quem transmite parar ou cair, avisa
-      conn.on('close', () => sair('A transmissão acabou.'));
-    });
+    setVazio('CONECTANDO...');
+    iniciarSala({ souDono: false, hostId: hostId, perfil: perfil, senha: senha });
   };
 }
+
+if (hostId) modoParticipante(); else modoDono();
 </script>
 </body>
 </html>
