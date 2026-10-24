@@ -49,11 +49,19 @@
   @media (max-width: 900px) { #app.com-lateral { grid-template-columns: minmax(0, 1fr); } }
 
   /* ===== CARTÕES ===== */
-  #ui, #salainfo, #config, #painel, #musica, #chat { background: var(--painel); border: 4px solid var(--borda); box-shadow: 6px 6px 0 var(--borda); padding: .9rem 1rem; margin-bottom: 1.2rem; }
-  #ui:empty, #salainfo:empty, #config:empty, #painel:empty, #musica:empty, #chat:empty { display: none; }
+  #ui, #config, #painel, #musica, #chat { background: var(--painel); border: 4px solid var(--borda); box-shadow: 6px 6px 0 var(--borda); padding: .9rem 1rem; margin-bottom: 1.2rem; }
+  #ui:empty, #config:empty, #painel:empty, #musica:empty, #chat:empty { display: none; }
   #ui { text-align: center; }
-  #salainfo { display: flex; align-items: center; justify-content: center; gap: .7rem; flex-wrap: wrap; }
-  #salainfo .avatar { width: 34px; height: 34px; }
+  /* barra de cima da sala: quem é o dono + botões */
+  #ui.sala { display: flex; align-items: center; justify-content: space-between; gap: .8rem; flex-wrap: wrap; text-align: left; }
+  #ui.sala .sala-info { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+  #ui.sala .sala-info .avatar { width: 34px; height: 34px; }
+  #ui.sala .controles { margin-top: 0; justify-content: flex-end; }
+
+  /* abas da coluna lateral: uma coisa de cada vez */
+  #abas { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1.2rem; }
+  #abas:empty { display: none; }
+  #abas button { margin: 0; flex: 1 1 auto; padding: .2rem .5rem; font-size: var(--t-pequeno); }
 
   /* ===== TELAS (uma por pessoa que está transmitindo) ===== */
   #telas { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 1.2rem; margin-bottom: 1.2rem; }
@@ -183,10 +191,10 @@
 <main id="app">
   <section id="palco">
     <div id="ui"></div>
-    <div id="salainfo"></div>
     <div id="telas"></div>
   </section>
   <aside id="lateral" hidden>
+    <div id="abas"></div>
     <div id="config"></div>
     <div id="painel"></div>
     <div id="musica"></div>
@@ -204,6 +212,7 @@ const BITRATE = 1500000;         // 1.5 Mbps por espectador (baixe se a sua inte
 const INTERVALO_STATUS = 3000;   // cada pessoa avisa o status a cada 3s
 const TEMPO_SEM_SINAL = 9000;    // se ficar 9s sem avisar, aparece "sem sinal"
 const TAMANHO_MAX_SOM = 1000000; // sons escolhidos do seu PC: máximo ~1 MB
+const TEMPO_ENTRADA = 15000;     // se não conseguir entrar na sala em 15s, avisa o que pode ser
 
 // Sons que estão no repositório (na mesma pasta do index.html).
 // Pra adicionar mais, suba o arquivo no GitHub e acrescente uma linha aqui.
@@ -217,7 +226,6 @@ const SONS_PRONTOS = [
 
 const $ = id => document.getElementById(id);
 const ui = $('ui');
-const salaInfo = $('salainfo');
 const telas = $('telas');
 const lateral = $('lateral');
 const app = $('app');
@@ -556,7 +564,7 @@ function criarSons() {
   let audioCtx = null;
   try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
   let somLigado = true;
-  let cfgAberto = false;
+  let cfgAberto = true;
 
   // fonte: 'bipe', 'p0'...'p4' (sons prontos) ou 'custom' (arquivo escolhido do PC)
   const config = lerSalvo('syt-sons', {
@@ -1019,7 +1027,7 @@ function montarMusicaSeguir(inicial) {
   ctl.append(bSinc, bMudo, vol);
 
   const dica = document.createElement('small');
-  dica.textContent = 'Quem está transmitindo controla a música.';
+  dica.textContent = 'Quem está transmitindo controla a música. Se ninguém transmite, é o dono da sala.';
 
   musicaBox.append(titulo, status, wrap, ctl, dica);
 
@@ -1165,7 +1173,7 @@ function iniciarSala(op) {
   let chat = null;
   let dono = null;
   let controladorMusica = null; // quem controla a música agora
-  let statusTimer = null, hubTimer = null;
+  let statusTimer = null, hubTimer = null, prazoEntrada = null, entrou = false;
 
   const pessoas = new Map();       // id -> { nome, foto, cod }  (cod: 0 ok, 1 aba em 2º plano, 2 sem sinal)
   const transmissores = new Map(); // id -> { nome, mudo }
@@ -1175,7 +1183,10 @@ function iniciarSala(op) {
   // elementos da lista de pessoas e dos botões
   let painelPronto = false, contador = null, lista = null;
   const linhas = new Map();
-  let bTx = null, bMudoTx = null;
+  let bTx = null, bMudoTx = null, infoEl = null;
+  const abas = { chat: chatBox, pessoas: painel, musica: musicaBox, sons: cfgBox };
+  const botoesAba = {};
+  let abaAtual = 'chat', naoLidas = 0;
 
   // ---------- falar com o dono ----------
   function enviarAoHub(msg) {
@@ -1190,6 +1201,7 @@ function iniciarSala(op) {
     encerrado = true;
     clearInterval(statusTimer);
     clearInterval(hubTimer);
+    clearTimeout(prazoEntrada);
     if (minhaTx) {
       minhaTx.calls.forEach(c => { try { c.close(); } catch (e) {} });
       minhaTx.stream.getTracks().forEach(t => t.stop());
@@ -1202,23 +1214,26 @@ function iniciarSala(op) {
     chatBox.innerHTML = '';
     painel.innerHTML = '';
     cfgBox.innerHTML = '';
-    salaInfo.innerHTML = '';
+    $('abas').innerHTML = '';
+    Object.keys(abas).forEach(k => { abas[k].hidden = false; });
     lateral.hidden = true;
     app.classList.remove('com-lateral');
     setVazio('FIM');
     atualizarVazio();
+    ui.className = '';
     ui.innerHTML = msg + '<br><button onclick="location.reload()">' + (souDono ? 'Criar nova sala' : 'Entrar de novo') + '</button>';
   }
 
   // ---------- interface da sala ----------
   function mostrarSalaInfo(d, discord) {
-    salaInfo.innerHTML = '';
+    if (!infoEl) return;
+    infoEl.innerHTML = '';
     const t = document.createElement('span');
     t.textContent = 'Sala de:';
     const n = document.createElement('strong');
     n.textContent = String(d.nome || 'Anônimo').slice(0, 20);
     n.style.color = corNome(n.textContent);
-    salaInfo.append(t, criarAvatar(n.textContent, fotoValida(d.foto) ? d.foto : null), n);
+    infoEl.append(t, criarAvatar(n.textContent, fotoValida(d.foto) ? d.foto : null), n);
     if (discordValido(discord)) { // botão pra entrar na call do Discord
       const a = document.createElement('a');
       a.className = 'btn-link';
@@ -1226,36 +1241,40 @@ function iniciarSala(op) {
       a.target = '_blank';
       a.rel = 'noopener noreferrer';
       a.textContent = 'Entrar na call do Discord';
-      salaInfo.appendChild(a);
+      infoEl.appendChild(a);
+    }
+  }
+
+  // copia o link da sala (só o dono tem o botão "Convidar")
+  function copiarLink() {
+    const link = location.href.split('#')[0] + '#' + peer.id;
+    const ok = () => toast('Link da sala copiado!' + (op.senha ? ' Mande a senha também.' : ''), 'entrou');
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(link).then(ok).catch(() => prompt('Copie o link da sala:', link));
+    } else {
+      prompt('Copie o link da sala:', link);
     }
   }
 
   function montarBarra() {
     ui.innerHTML = '';
-    if (souDono) {
-      const info = document.createElement('div');
-      info.appendChild(document.createTextNode('Mande este link pros amigos:'));
-      info.appendChild(document.createElement('br'));
-      const inp = document.createElement('input');
-      inp.readOnly = true;
-      inp.value = location.href.split('#')[0] + '#' + peer.id;
-      inp.onclick = () => inp.select();
-      info.appendChild(inp);
-      if (op.senha) {
-        const s = document.createElement('small');
-        s.textContent = 'Sala protegida por senha.';
-        info.append(document.createElement('br'), s);
-      }
-      ui.appendChild(info);
-    }
+    ui.className = 'sala';
+    infoEl = document.createElement('div');
+    infoEl.className = 'sala-info';
     const linha = document.createElement('div');
     linha.className = 'controles';
     bTx = criarBotao('Transmitir minha tela');
     bMudoTx = criarBotao('Mutar meu áudio', 'sec');
     bMudoTx.hidden = true;
+    linha.append(bTx, bMudoTx);
+    if (souDono) {
+      const bConvidar = criarBotao('Convidar', 'sec');
+      bConvidar.onclick = copiarLink;
+      linha.appendChild(bConvidar);
+    }
     const bSair = criarBotao(souDono ? 'Encerrar sala' : 'Sair da sala', 'perigo');
-    linha.append(bTx, bMudoTx, bSair);
-    ui.appendChild(linha);
+    linha.appendChild(bSair);
+    ui.append(infoEl, linha);
 
     bTx.onclick = () => { if (minhaTx) pararMinhaTx(true); else iniciarMinhaTx(); };
     bMudoTx.onclick = alternarMeuMudo;
@@ -1306,6 +1325,7 @@ function iniciarSala(op) {
 
   function painelRender() {
     if (!painelPronto || encerrado) return;
+    atualizarAbas();
     const txt = pessoas.size + '/' + MAX_PESSOAS;
     if (contador.textContent !== txt) {
       contador.textContent = txt;
@@ -1341,6 +1361,35 @@ function iniciarSala(op) {
     });
   }
 
+  // ---------- abas da coluna lateral (Chat / Pessoas / Música / Sons) ----------
+  function montarAbas() {
+    const barra = $('abas');
+    barra.innerHTML = '';
+    [['chat', 'Chat'], ['pessoas', 'Pessoas'], ['musica', 'Música'], ['sons', 'Sons']].forEach(([id, rotulo]) => {
+      const b = criarBotao(rotulo, 'sec');
+      b.onclick = () => abrirAba(id);
+      botoesAba[id] = b;
+      barra.appendChild(b);
+    });
+    abrirAba('chat');
+  }
+
+  function abrirAba(id) {
+    abaAtual = id;
+    if (id === 'chat') naoLidas = 0;
+    Object.keys(abas).forEach(k => { abas[k].hidden = (k !== id); });
+    atualizarAbas();
+  }
+
+  function atualizarAbas() {
+    if (!botoesAba.chat) return;
+    Object.keys(botoesAba).forEach(k => {
+      if (k === abaAtual) botoesAba[k].classList.add('sel'); else botoesAba[k].classList.remove('sel');
+    });
+    botoesAba.chat.textContent = 'Chat' + (naoLidas ? ' (' + naoLidas + ')' : '');
+    botoesAba.pessoas.textContent = 'Pessoas ' + pessoas.size + '/' + MAX_PESSOAS;
+  }
+
   function montarSala() {
     lateral.hidden = false;
     app.classList.add('com-lateral');
@@ -1348,6 +1397,7 @@ function iniciarSala(op) {
     montarPainel();
     sons.desenharConfig();
     montarBarra();
+    montarAbas();
     setVazio('NINGUÉM TRANSMITINDO');
     atualizarVazio();
   }
@@ -1433,6 +1483,8 @@ function iniciarSala(op) {
     if (!d || encerrado) return;
     switch (d.tipo) {
       case 'entrada': {
+        entrou = true;
+        clearTimeout(prazoEntrada);
         eu.id = d.voce;
         dono = { id: d.dono.id, nome: String(d.dono.nome || 'Anônimo').slice(0, 20), foto: fotoValida(d.dono.foto) ? d.dono.foto : null };
         pessoas.clear();
@@ -1478,6 +1530,7 @@ function iniciarSala(op) {
       }
       case 'msg':
         if (chat) chat.receber(d);
+        if (abaAtual !== 'chat' && !d.sistema) { naoLidas++; atualizarAbas(); } // mostra "Chat (2)" na aba
         break;
       case 'tx-inicio': {
         transmissores.set(d.id, { nome: String(d.nome || 'Alguém').slice(0, 20), mudo: false });
@@ -1513,6 +1566,7 @@ function iniciarSala(op) {
         break;
       case 'musica-dono':
         controladorMusica = d.id || null;
+        if (controladorMusica === eu.id) toast('Você controla a música agora (aba Música)', 'entrou');
         musica.definirControlador(controladorMusica === eu.id);
         break;
       case 'yt':
@@ -1594,6 +1648,7 @@ function iniciarSala(op) {
   function atualizarControladorMusica() {
     let melhor = null, desde = Infinity;
     transmissoesHub.forEach((t, id) => { if (t.desde < desde) { desde = t.desde; melhor = id; } });
+    if (melhor === null) melhor = eu.id; // ninguém transmitindo: o dono controla a música
     if (melhor !== controladorMusica) {
       controladorMusica = melhor;
       difundir({ tipo: 'musica-dono', id: melhor });
@@ -1695,18 +1750,27 @@ function iniciarSala(op) {
     eu.id = id;
     if (souDono) {
       participantes.set(id, { conn: null, nome: eu.nome, foto: eu.foto, visivel: true, ultimo: Date.now(), ultimaMsg: 0 });
+      controladorMusica = id; // no começo, o dono controla a música
       hubTimer = setInterval(hubTick, 3000);
       // o dono "entra" na própria sala sem passar pela rede
       aoReceberDoHub({
         tipo: 'entrada', voce: id,
         dono: { id: id, nome: eu.nome, foto: eu.foto },
         discord: op.discordLink || '',
-        participantes: listaPessoas(), transmissoes: [], controlador: null, musica: null
+        participantes: listaPessoas(), transmissoes: [], controlador: controladorMusica, musica: null
       });
       return;
     }
 
     conn = peer.connect(op.hostId);
+    // se a conexão não completar, em vez de ficar eternamente em "Conectando...", explica o que conferir
+    prazoEntrada = setTimeout(() => {
+      if (entrou) return;
+      sair('Não consegui entrar na sala (demorou demais).' +
+        '<br><small>Confira: o dono está com a página aberta? O link tem o # com o código no final? ' +
+        'Os dois deram Ctrl+F5 pra pegar a versão nova do site? ' +
+        'Redes de escola/trabalho e dados móveis às vezes bloqueiam a conexão: tente outro Wi-Fi.</small>');
+    }, TEMPO_ENTRADA);
     conn.on('open', () => {
       conn.send({ tipo: 'oi', nome: eu.nome, foto: eu.foto, senha: op.senha || '' });
       function enviarStatus() {
@@ -1722,6 +1786,9 @@ function iniciarSala(op) {
       else if (d.tipo === 'senhaErrada') {
         try { sessionStorage.removeItem('syt-senha'); } catch (e) {}
         sair('Senha incorreta.');
+      }
+      else if (d.tipo === 'host') { // mensagem do site antigo (antes das salas)
+        sair('O dono está com uma versão antiga do site. Peça pra ele atualizar a página (Ctrl+F5) e mandar o link novo.');
       }
       else aoReceberDoHub(d);
     });
