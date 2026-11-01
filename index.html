@@ -9,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>window.Peer || document.write('<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"><\/script>');</script>
 <style>
   /* ===== FONTE (estilo Deltarune) =====
      Coloque o arquivo da fonte na mesma pasta do index.html com o nome fonte.ttf.
@@ -42,6 +43,8 @@
   .logo { display: flex; align-items: center; gap: .8rem; font-family: var(--pixel); font-size: var(--t-titulo); }
   .logo .syt { color: var(--destaque); }
   .logo svg { width: 34px; height: 34px; flex: none; }
+
+  #versao { color: var(--suave); font-size: var(--t-pequeno); margin-right: .5rem; }
 
   /* ===== LAYOUT ===== */
   #app { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.2rem; max-width: 1400px; margin: 1.2rem auto; padding: 0 1rem; }
@@ -157,6 +160,15 @@
   a.btn-link { font-family: var(--corpo); font-size: var(--t-pequeno); text-transform: uppercase; text-decoration: none; padding: .15rem .7rem; color: var(--destaque-texto); background: var(--destaque); border: 3px solid var(--borda); box-shadow: 4px 4px 0 var(--borda); }
   a.btn-link:active { transform: translate(4px, 4px); box-shadow: none; }
 
+  /* ===== MINI PLAYER DA MÚSICA (sempre no canto inferior esquerdo) ===== */
+  #minimusica { position: fixed; left: 1rem; bottom: 1rem; width: 280px; max-width: calc(100vw - 2rem); z-index: 40; background: var(--painel); border: 4px solid var(--borda); box-shadow: 6px 6px 0 var(--borda); padding: .5rem; }
+  #minimusica .mini-topo { display: flex; align-items: center; justify-content: space-between; gap: .5rem; font-family: var(--pixel); font-size: var(--t-titulo); margin-bottom: .4rem; }
+  #minimusica .mini-topo button { margin: 0; padding: .05rem .6rem; font-size: var(--t-pequeno); }
+  #minimusica .yt-wrap { margin: 0; }
+  #minimusica .musica-ctl { margin-top: .4rem; }
+  #minimusica.recolhido .yt-wrap { height: 0; border: 0; overflow: hidden; } /* esconde o vídeo, mas a música continua tocando */
+  #minimusica.recolhido .musica-ctl { margin-top: 0; }
+
   /* ===== AVISOS (TOASTS) ===== */
   #toasts { position: fixed; right: 1rem; bottom: 1rem; display: flex; flex-direction: column; gap: .6rem; z-index: 50; pointer-events: none; }
   .toast { background: var(--painel); color: var(--texto); border: 4px solid var(--borda); box-shadow: 4px 4px 0 var(--borda); padding: .5rem .9rem; animation: entra .4s steps(6) both, sumir .4s steps(4) 2.8s forwards; }
@@ -185,7 +197,7 @@
     </svg>
     <span>Screentoyoutoo<span class="syt">.SYT</span></span>
   </div>
-  <button id="tema" class="sec"></button>
+  <div><span id="versao"></span> <button id="tema" class="sec"></button></div>
 </header>
 
 <main id="app">
@@ -203,6 +215,7 @@
 </main>
 
 <div id="toasts"></div>
+<div id="minimusica" hidden></div>
 
 <script>
 // ===== CONFIGURAÇÕES =====
@@ -213,6 +226,8 @@ const INTERVALO_STATUS = 3000;   // cada pessoa avisa o status a cada 3s
 const TEMPO_SEM_SINAL = 9000;    // se ficar 9s sem avisar, aparece "sem sinal"
 const TAMANHO_MAX_SOM = 1000000; // sons escolhidos do seu PC: máximo ~1 MB
 const TEMPO_ENTRADA = 15000;     // se não conseguir entrar na sala em 15s, avisa o que pode ser
+const VERSAO = '2026-11-01-c';   // muda a cada atualização do site (o link do "Convidar" leva isso, pra todo mundo pegar a versão nova)
+const PROTOCOLO = 3;             // muda só quando a forma de conversar entre as pessoas muda
 
 // Sons que estão no repositório (na mesma pasta do index.html).
 // Pra adicionar mais, suba o arquivo no GitHub e acrescente uma linha aqui.
@@ -235,6 +250,7 @@ const musicaBox = $('musica');
 const chatBox = $('chat');
 const toasts = $('toasts');
 const btnTema = $('tema');
+const miniBox = $('minimusica');
 const hostId = location.hash.slice(1); // se tiver #id na URL, a pessoa vai entrar numa sala; senão, vai criar uma
 
 // ===== FUNÇÕES AUXILIARES =====
@@ -257,6 +273,7 @@ function aplicarTema(t) {
 }
 aplicarTema(lerSalvo('syt-tema', { tema: 'escuro' }).tema === 'claro' ? 'claro' : 'escuro');
 btnTema.onclick = () => aplicarTema(document.documentElement.dataset.tema === 'claro' ? 'escuro' : 'claro');
+$('versao').textContent = 'v' + VERSAO;
 
 // aviso no canto da tela (entrou/saiu)
 function toast(texto, tipo) {
@@ -861,6 +878,27 @@ function montarChat(enviar) {
   return { receber: receber };
 }
 
+// ===== MINI PLAYER FLUTUANTE (a música fica sempre no canto da tela, em qualquer aba) =====
+function mostrarMini(on) { miniBox.hidden = !on; }
+function limparMini() { miniBox.innerHTML = ''; miniBox.hidden = true; }
+// cria o cabeçalho (título + botão de recolher) e devolve o espaço onde vão o player e os controles
+function prepararMini(titulo) {
+  limparMini();
+  const topo = document.createElement('div');
+  topo.className = 'mini-topo';
+  const t = document.createElement('span');
+  t.textContent = titulo;
+  const b = criarBotao(miniBox.classList.contains('recolhido') ? '+' : '–', 'sec');
+  b.onclick = () => {
+    if (miniBox.classList.contains('recolhido')) { miniBox.classList.remove('recolhido'); b.textContent = '–'; }
+    else { miniBox.classList.add('recolhido'); b.textContent = '+'; }
+  };
+  topo.append(t, b);
+  const slot = document.createElement('div');
+  miniBox.append(topo, slot);
+  return slot;
+}
+
 // ===== MÚSICA (YouTube, ouvir junto) =====
 const REGEX_YT_ID = /^[A-Za-z0-9_-]{11}$/;
 
@@ -883,6 +921,16 @@ function ytId(link) {
   return id && REGEX_YT_ID.test(id) ? id : null;
 }
 
+// tira o ID da playlist (o "list=" do link). Playlists automáticas (Mix, que começam com RD) não funcionam em outros sites.
+function ytLista(link) {
+  let u;
+  try { u = new URL(String(link).trim()); } catch (e) { return null; }
+  const h = u.hostname.replace(/^www\./, '');
+  if (h !== 'youtube.com' && h !== 'm.youtube.com' && h !== 'music.youtube.com' && h !== 'youtu.be') return null;
+  const l = u.searchParams.get('list');
+  return (l && /^[A-Za-z0-9_-]{10,60}$/.test(l) && !/^RD/.test(l)) ? l : null;
+}
+
 // carrega o player do YouTube só quando precisa
 let ytPromessa = null;
 function carregarYT() {
@@ -898,6 +946,7 @@ function carregarYT() {
 }
 
 // quem controla a música: tem o campo do link, o player com controles e manda o estado pra todo mundo
+// (vale pra vídeo e pra playlist: o resto da sala só acompanha qual vídeo está tocando e em que segundo)
 function montarMusicaControle(enviar, inicial) {
   const titulo = document.createElement('div');
   titulo.className = 'titulo';
@@ -906,11 +955,23 @@ function montarMusicaControle(enviar, inicial) {
   const linha = document.createElement('div');
   linha.className = 'chat-form';
   const inp = document.createElement('input');
-  inp.placeholder = 'Cole o link do YouTube';
+  inp.placeholder = 'Link de vídeo ou playlist do YouTube';
   inp.maxLength = 200;
   const bTocar = criarBotao('Tocar');
   const bParar = criarBotao('Parar', 'sec');
   linha.append(inp, bTocar, bParar);
+
+  // controles que só aparecem quando é uma playlist
+  const listaCtl = document.createElement('div');
+  listaCtl.className = 'musica-ctl';
+  listaCtl.hidden = true;
+  const bAnt = criarBotao('Anterior', 'sec');
+  const bProx = criarBotao('Próxima', 'sec');
+  const bRep = criarBotao('Repetir: não', 'sec');
+  listaCtl.append(bAnt, bProx, bRep);
+
+  const statusEl = document.createElement('div');
+  statusEl.style.color = 'var(--suave)';
 
   const wrap = document.createElement('div');
   wrap.className = 'yt-wrap';
@@ -918,41 +979,83 @@ function montarMusicaControle(enviar, inicial) {
   wrap.innerHTML = '<div id="ytplayer"></div>';
 
   const dica = document.createElement('small');
-  dica.textContent = 'Todo mundo ouve junto com você. Se estiver compartilhando o áudio do sistema, mute o áudio da sua transmissão pra ninguém ouvir em dobro.';
+  dica.textContent = 'Todo mundo ouve junto com você. Se estiver compartilhando o áudio do sistema, mute o áudio da sua transmissão pra ninguém ouvir em dobro. Playlists automáticas (Mix) e privadas não funcionam.';
 
-  musicaBox.append(titulo, linha, wrap, dica);
+  musicaBox.append(titulo, linha, listaCtl, statusEl, dica);
+  prepararMini('Música (você controla)').appendChild(wrap); // o player fica no canto da tela
+  function setWrap(on) { wrap.hidden = !on; mostrarMini(on); }
 
-  let player = null, idAtual = null, tocando = false, destruido = false;
+  let player = null, idAtual = null, tocando = false, destruido = false, modoLista = false, repetir = false;
+
+  // descobre qual vídeo está tocando agora (importante nas playlists, que trocam de vídeo sozinhas)
+  function atualizarId() {
+    try {
+      const v = player && player.getVideoData && player.getVideoData();
+      if (v && v.video_id && REGEX_YT_ID.test(v.video_id)) idAtual = v.video_id;
+    } catch (e) {}
+  }
+  function atualizarStatus() {
+    let txt = '';
+    try {
+      if (modoLista && player) {
+        const n = (player.getPlaylist() || []).length;
+        if (n) txt = 'Playlist: vídeo ' + (player.getPlaylistIndex() + 1) + ' de ' + n;
+      }
+    } catch (e) {}
+    statusEl.textContent = txt;
+  }
 
   function estado() {
+    atualizarId();
     let t = 0;
     try { if (player && player.getCurrentTime) t = player.getCurrentTime() || 0; } catch (e) {}
     return { tipo: 'yt', id: idAtual, t: t, tocando: tocando };
   }
-  function enviarEstado() { enviar(estado()); }
+  function enviarEstado() {
+    atualizarId();
+    if (!idAtual && modoLista) return; // playlist ainda carregando: espera saber qual é o primeiro vídeo
+    enviar(estado());
+  }
 
   function aoMudar(e) {
     const st = e.data;
     if (st === 1) tocando = true;                      // tocando
     else if (st === 2 || st === 0) tocando = false;    // pausado ou terminou
     else return;
+    atualizarStatus();
     enviarEstado();
   }
 
   function tocarLink() {
-    const id = ytId(inp.value);
-    if (!id) { alert('Link do YouTube inválido. Cole o link de um vídeo.'); return; }
+    const lista = ytLista(inp.value);
+    const id = lista ? null : ytId(inp.value); // se tem playlist no link, toca a playlist
+    if (!lista && !id) { alert('Link inválido. Cole o link de um vídeo ou de uma playlist do YouTube (playlists automáticas, tipo Mix, não funcionam).'); return; }
+    let indice = 0;
+    if (lista) { // se o link veio de um vídeo dentro da playlist, começa dele (o "index=" do link)
+      try { indice = Math.max(0, (parseInt(new URL(inp.value.trim()).searchParams.get('index'), 10) || 1) - 1); } catch (e) {}
+    }
     carregarYT().then(() => {
       if (destruido) return;
-      wrap.hidden = false;
-      idAtual = id;
+      setWrap(true);
       tocando = true;
+      modoLista = !!lista;
+      idAtual = id;
+      repetir = false;
+      bRep.textContent = 'Repetir: não';
+      listaCtl.hidden = !modoLista;
+      statusEl.textContent = '';
       if (!player) {
+        const vars = { autoplay: 1, playsinline: 1, rel: 0 };
+        if (lista) { vars.listType = 'playlist'; vars.list = lista; }
         player = new YT.Player('ytplayer', {
-          width: '100%', height: '180', videoId: id,
-          playerVars: { autoplay: 1, playsinline: 1, rel: 0 },
-          events: { onReady: e => e.target.playVideo(), onStateChange: aoMudar }
+          width: '100%', height: '158', videoId: id || undefined, playerVars: vars,
+          events: {
+            onReady: e => { if (lista && indice > 0) e.target.playVideoAt(indice); else e.target.playVideo(); },
+            onStateChange: aoMudar
+          }
         });
+      } else if (lista) {
+        player.loadPlaylist({ listType: 'playlist', list: lista, index: indice });
       } else {
         player.loadVideoById(id);
       }
@@ -964,7 +1067,11 @@ function montarMusicaControle(enviar, inicial) {
     if (player) { try { player.destroy(); } catch (e) {} player = null; }
     idAtual = null;
     tocando = false;
-    wrap.hidden = true;
+    modoLista = false;
+    repetir = false;
+    listaCtl.hidden = true;
+    statusEl.textContent = '';
+    setWrap(false);
     wrap.innerHTML = '<div id="ytplayer"></div>';
     enviarEstado();
   }
@@ -972,25 +1079,37 @@ function montarMusicaControle(enviar, inicial) {
   bTocar.onclick = tocarLink;
   inp.onkeydown = e => { if (e.key === 'Enter') tocarLink(); };
   bParar.onclick = pararMusica;
+  bAnt.onclick = () => { if (player && modoLista) player.previousVideo(); };
+  bProx.onclick = () => { if (player && modoLista) player.nextVideo(); };
+  bRep.onclick = () => {
+    if (!player || !modoLista) return;
+    repetir = !repetir;
+    player.setLoop(repetir);
+    bRep.textContent = 'Repetir: ' + (repetir ? 'sim' : 'não');
+  };
 
-  // se virou controlador com uma música já tocando, continua de onde estava
+  // se virou controlador com uma música já tocando, continua de onde estava (só o vídeo atual, sem a playlist)
   if (inicial && inicial.id) {
     const t0 = inicial.tocando ? inicial.t + (Date.now() - inicial.quando) / 1000 : inicial.t;
     carregarYT().then(() => {
       if (destruido) return;
-      wrap.hidden = false;
+      setWrap(true);
       idAtual = inicial.id;
       tocando = inicial.tocando;
       player = new YT.Player('ytplayer', {
-        width: '100%', height: '180', videoId: inicial.id,
+        width: '100%', height: '158', videoId: inicial.id,
         playerVars: { autoplay: inicial.tocando ? 1 : 0, playsinline: 1, rel: 0, start: Math.floor(t0) },
         events: { onReady: e => { if (inicial.tocando) e.target.playVideo(); }, onStateChange: aoMudar }
       });
     });
   }
 
-  // a cada 4s manda o tempo atual, assim quem ficou pra trás (ou você pulou a música) se acerta sozinho
-  const tick = setInterval(() => { if (idAtual) enviarEstado(); }, 4000);
+  // a cada 4s manda o vídeo e o tempo atual, assim quem ficou pra trás (ou você pulou a música) se acerta sozinho
+  const tick = setInterval(() => {
+    atualizarId();
+    atualizarStatus();
+    if (idAtual) enviarEstado();
+  }, 4000);
 
   return {
     estado: estado,
@@ -999,6 +1118,7 @@ function montarMusicaControle(enviar, inicial) {
       destruido = true;
       clearInterval(tick);
       if (player) { try { player.destroy(); } catch (e) {} player = null; }
+      limparMini();
     }
   };
 }
@@ -1027,9 +1147,11 @@ function montarMusicaSeguir(inicial) {
   ctl.append(bSinc, bMudo, vol);
 
   const dica = document.createElement('small');
-  dica.textContent = 'Quem está transmitindo controla a música. Se ninguém transmite, é o dono da sala.';
+  dica.textContent = 'Quem está transmitindo controla a música. Se ninguém transmite, é o dono da sala. O player e os controles ficam no canto da tela.';
 
-  musicaBox.append(titulo, status, wrap, ctl, dica);
+  musicaBox.append(titulo, status, dica);
+  prepararMini('Música').append(wrap, ctl); // player e controles ficam no canto da tela
+  function setWrap(on) { wrap.hidden = !on; mostrarMini(on); }
 
   let player = null, pronto = false, idAtual = null, ultimo = null, destruido = false;
 
@@ -1042,7 +1164,7 @@ function montarMusicaSeguir(inicial) {
     if (player) { try { player.destroy(); } catch (e) {} }
     player = null; pronto = false; idAtual = null;
     recriarAlvo();
-    wrap.hidden = true;
+    setWrap(false);
     ctl.hidden = true;
     status.textContent = 'Nenhuma música tocando.';
   }
@@ -1065,7 +1187,7 @@ function montarMusicaSeguir(inicial) {
   function aplicar() {
     if (!ultimo) return;
     if (!ultimo.id) { limpar(); return; }
-    wrap.hidden = false;
+    setWrap(true);
     ctl.hidden = false;
     status.textContent = ultimo.tocando ? 'Tocando junto com a sala.' : 'Pausado.';
     carregarYT().then(() => {
@@ -1073,7 +1195,7 @@ function montarMusicaSeguir(inicial) {
       if (!player) {
         idAtual = ultimo.id;
         player = new YT.Player('ytplayerv', {
-          width: '100%', height: '180', videoId: ultimo.id,
+          width: '100%', height: '158', videoId: ultimo.id,
           playerVars: { controls: 0, disablekb: 1, playsinline: 1, rel: 0, autoplay: ultimo.tocando ? 1 : 0, start: Math.floor(tempoAtual()) },
           events: { onReady: () => { pronto = true; ajustar(); } }
         });
@@ -1110,6 +1232,7 @@ function montarMusicaSeguir(inicial) {
       destruido = true;
       if (player) { try { player.destroy(); } catch (e) {} }
       player = null;
+      limparMini();
     }
   };
 }
@@ -1152,6 +1275,7 @@ function criarMusica(enviar) {
       if (atual) atual.destruir();
       atual = null;
       musicaBox.innerHTML = '';
+      limparMini();
     }
   };
 }
@@ -1159,7 +1283,19 @@ function criarMusica(enviar) {
 // ===== A SALA =====
 // Quem cria a sala (o "dono") coordena tudo: senha, lista de pessoas, chat, quem está transmitindo.
 // Cada pessoa que transmite manda a própria tela direto pras outras.
+const MSG_SERVIDOR = '<br><small>A rede ou um bloqueador de anúncios (escudo do Brave, uBlock...) pode estar bloqueando o servidor de conexão (PeerJS). ' +
+  'Desative o bloqueador pra esta página ou tente outro Wi-Fi.</small>';
+
 function iniciarSala(op) {
+  // se a biblioteca de conexão não carregou (rede ou bloqueador de anúncios), avisa em vez de ficar travado
+  if (typeof Peer === 'undefined') {
+    ui.className = '';
+    ui.innerHTML = 'Não consegui carregar a biblioteca de conexão (PeerJS).' +
+      '<br><small>A rede ou um bloqueador de anúncios pode estar bloqueando cdn.jsdelivr.net e unpkg.com. ' +
+      'Desative o bloqueador (ou o escudo do Brave) pra esta página, ou tente outra rede.</small>' +
+      '<br><button onclick="location.reload()">Tentar de novo</button>';
+    return;
+  }
   const souDono = !!op.souDono;
   const perfil = op.perfil;
   const eu = { id: null, nome: perfil.nome, foto: fotoValida(perfil.foto) ? perfil.foto : null };
@@ -1173,7 +1309,7 @@ function iniciarSala(op) {
   let chat = null;
   let dono = null;
   let controladorMusica = null; // quem controla a música agora
-  let statusTimer = null, hubTimer = null, prazoEntrada = null, entrou = false;
+  let statusTimer = null, hubTimer = null, prazoEntrada = null, entrou = false, peerAbriu = false;
 
   const pessoas = new Map();       // id -> { nome, foto, cod }  (cod: 0 ok, 1 aba em 2º plano, 2 sem sinal)
   const transmissores = new Map(); // id -> { nome, mudo }
@@ -1247,7 +1383,11 @@ function iniciarSala(op) {
 
   // copia o link da sala (só o dono tem o botão "Convidar")
   function copiarLink() {
-    const link = location.href.split('#')[0] + '#' + peer.id;
+    // o "?v=" faz o navegador de quem receber buscar a versão nova do site (e não uma guardada de antes)
+    const u = new URL(location.href);
+    u.hash = '';
+    u.searchParams.set('v', VERSAO);
+    const link = u.toString() + '#' + peer.id;
     const ok = () => toast('Link da sala copiado!' + (op.senha ? ' Mande a senha também.' : ''), 'entrou');
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(link).then(ok).catch(() => prompt('Copie o link da sala:', link));
@@ -1721,6 +1861,11 @@ function iniciarSala(op) {
       if (!d || encerrado) return;
       if (!autenticado) {
         if (d.tipo !== 'oi') return; // antes de entrar, só o "oi" é aceito
+        if (d.p !== undefined && d.p !== PROTOCOLO) { // versões que não se entendem
+          try { c.send({ tipo: 'protocolo' }); } catch (e) {}
+          setTimeout(() => c.close(), 300);
+          return;
+        }
         if (op.senha && d.senha !== op.senha) {
           // senha errada: espera 1s (atrapalha quem tenta adivinhar) e desconecta
           setTimeout(() => {
@@ -1746,9 +1891,26 @@ function iniciarSala(op) {
   });
 
   // ---------- começar ----------
+  // o prazo conta desde o clique: se travar em qualquer etapa (servidor, conexão com o dono), explica o que conferir
+  prazoEntrada = setTimeout(() => {
+    if (souDono) {
+      if (peerAbriu) return;
+      sair('Não consegui criar a sala.' + MSG_SERVIDOR);
+    } else {
+      if (entrou) return;
+      if (!peerAbriu) sair('Não consegui falar com o servidor de conexão.' + MSG_SERVIDOR);
+      else sair('Não consegui entrar na sala (demorou demais).' +
+        '<br><small>Confira: o dono está com a página aberta? O link tem o # com o código no final? ' +
+        'Os dois estão com a mesma versão do site (veja o "v..." no canto de cima)? ' +
+        'Redes de escola/trabalho e dados móveis às vezes bloqueiam a conexão: tente outro Wi-Fi.</small>');
+    }
+  }, TEMPO_ENTRADA);
+
   peer.on('open', id => {
+    peerAbriu = true;
     eu.id = id;
     if (souDono) {
+      clearTimeout(prazoEntrada);
       participantes.set(id, { conn: null, nome: eu.nome, foto: eu.foto, visivel: true, ultimo: Date.now(), ultimaMsg: 0 });
       controladorMusica = id; // no começo, o dono controla a música
       hubTimer = setInterval(hubTick, 3000);
@@ -1763,16 +1925,8 @@ function iniciarSala(op) {
     }
 
     conn = peer.connect(op.hostId);
-    // se a conexão não completar, em vez de ficar eternamente em "Conectando...", explica o que conferir
-    prazoEntrada = setTimeout(() => {
-      if (entrou) return;
-      sair('Não consegui entrar na sala (demorou demais).' +
-        '<br><small>Confira: o dono está com a página aberta? O link tem o # com o código no final? ' +
-        'Os dois deram Ctrl+F5 pra pegar a versão nova do site? ' +
-        'Redes de escola/trabalho e dados móveis às vezes bloqueiam a conexão: tente outro Wi-Fi.</small>');
-    }, TEMPO_ENTRADA);
     conn.on('open', () => {
-      conn.send({ tipo: 'oi', nome: eu.nome, foto: eu.foto, senha: op.senha || '' });
+      conn.send({ tipo: 'oi', nome: eu.nome, foto: eu.foto, senha: op.senha || '', p: PROTOCOLO });
       function enviarStatus() {
         if (encerrado || !conn.open) return;
         conn.send({ tipo: 'status', visivel: !document.hidden });
@@ -1786,6 +1940,9 @@ function iniciarSala(op) {
       else if (d.tipo === 'senhaErrada') {
         try { sessionStorage.removeItem('syt-senha'); } catch (e) {}
         sair('Senha incorreta.');
+      }
+      else if (d.tipo === 'protocolo') {
+        sair('O seu site e o do dono estão em versões diferentes. Abra o link novo do dono (botão Convidar) ou dê Ctrl+F5.');
       }
       else if (d.tipo === 'host') { // mensagem do site antigo (antes das salas)
         sair('O dono está com uma versão antiga do site. Peça pra ele atualizar a página (Ctrl+F5) e mandar o link novo.');
@@ -1804,6 +1961,12 @@ function iniciarSala(op) {
 }
 
 // ===== ENTRADA: criar sala ou entrar numa sala =====
+// abre a sala e, se der qualquer erro, mostra na tela (em vez de ficar eternamente em "Conectando...")
+function iniciarSalaSeguro(op) {
+  try { iniciarSala(op); }
+  catch (e) { ui.className = ''; ui.textContent = 'Erro ao abrir a sala: ' + (e && e.message ? e.message : e); }
+}
+
 function modoDono() {
   setVazio('AGUARDANDO...');
   const confirmar = formPerfil('syt-perfil', 'Criar sala', 'go',
@@ -1821,7 +1984,7 @@ function modoDono() {
     }
     gravarSalvo('syt-discord', { link: discordLink });
     ui.textContent = 'Criando sala...';
-    iniciarSala({ souDono: true, perfil: perfil, senha: senha, discordLink: discordLink });
+    iniciarSalaSeguro({ souDono: true, perfil: perfil, senha: senha, discordLink: discordLink });
   };
 }
 
@@ -1841,7 +2004,7 @@ function modoParticipante() {
     try { sessionStorage.setItem('syt-senha', senha); } catch (e) {}
     ui.textContent = 'Conectando...';
     setVazio('CONECTANDO...');
-    iniciarSala({ souDono: false, hostId: hostId, perfil: perfil, senha: senha });
+    iniciarSalaSeguro({ souDono: false, hostId: hostId, perfil: perfil, senha: senha });
   };
 }
 
