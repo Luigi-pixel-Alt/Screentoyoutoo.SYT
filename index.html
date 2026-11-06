@@ -226,8 +226,14 @@ const INTERVALO_STATUS = 3000;   // cada pessoa avisa o status a cada 3s
 const TEMPO_SEM_SINAL = 9000;    // se ficar 9s sem avisar, aparece "sem sinal"
 const TAMANHO_MAX_SOM = 1000000; // sons escolhidos do seu PC: máximo ~1 MB
 const TEMPO_ENTRADA = 15000;     // se não conseguir entrar na sala em 15s, avisa o que pode ser
-const VERSAO = '2026-11-01-c';   // muda a cada atualização do site (o link do "Convidar" leva isso, pra todo mundo pegar a versão nova)
+const VERSAO = '2026-11-05-b';   // muda a cada atualização do site (o link do "Convidar" leva isso, pra todo mundo pegar a versão nova)
 const PROTOCOLO = 3;             // muda só quando a forma de conversar entre as pessoas muda
+
+// Servidor TURN (opcional). Ajuda quando a conexão direta entre dois aparelhos não passa (alguns Wi-Fi, dados móveis, redes de escola).
+// Cole aqui a lista "iceServers" que o serviço te dá (ex.: Metered / Open Relay), no formato:
+//   [ { urls: 'turn:...', username: '...', credential: '...' }, ... ]
+// Deixe [] pra não usar. Atenção: o que fica aqui é público (qualquer um que abrir o código vê).
+const ICE_EXTRA = [];
 
 // Sons que estão no repositório (na mesma pasta do index.html).
 // Pra adicionar mais, suba o arquivo no GitHub e acrescente uma linha aqui.
@@ -414,6 +420,17 @@ function formPerfil(chave, textoBotao, idBotao, dica, rotuloSenha, rotuloDiscord
 function discordValido(l) {
   return typeof l === 'string' && l.length < 150 &&
     /^https:\/\/(discord\.gg\/[A-Za-z0-9-]{2,32}|(www\.)?discord\.com\/(invite\/[A-Za-z0-9-]{2,32}|channels\/\d{5,25}\/\d{5,25}))\/?$/.test(l);
+}
+
+// cria a conexão com o servidor do PeerJS; se tiver servidores TURN extras, junta com os padrões da biblioteca
+function criarPeer() {
+  if (!ICE_EXTRA.length) return new Peer();
+  let base = [{ urls: 'stun:stun.l.google.com:19302' }];
+  try { // mantém os servidores que a própria biblioteca já usa, se ela deixar a gente ver
+    const d = window.peerjs && window.peerjs.util && window.peerjs.util.defaultConfig;
+    if (d && d.iceServers && d.iceServers.length) base = d.iceServers;
+  } catch (e) {}
+  return new Peer({ config: { iceServers: base.concat(ICE_EXTRA) } });
 }
 
 function limitarBitrate(call) {
@@ -1300,8 +1317,19 @@ function iniciarSala(op) {
   const perfil = op.perfil;
   const eu = { id: null, nome: perfil.nome, foto: fotoValida(perfil.foto) ? perfil.foto : null };
   const sons = criarSons();
-  const peer = new Peer();
+  const peer = criarPeer();
   const podeCapturar = !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
+
+  // anotações do que já aconteceu na conexão: aparecem nas mensagens de erro pra ajudar a achar o problema
+  const t0 = Date.now();
+  const passos = [];
+  function passo(txt) { passos.push(txt + ' (' + ((Date.now() - t0) / 1000).toFixed(1) + 's)'); }
+  function limpo(x) { return String(x).replace(/[^a-zA-Z0-9-]/g, '').slice(0, 20); }
+  function detalhes() {
+    let rede = '?';
+    try { if (conn && conn.peerConnection) rede = limpo(conn.peerConnection.iceConnectionState); } catch (e) {}
+    return '<br><small>Detalhes: ' + (passos.join(' > ') || 'nada aconteceu') + ' | rede: ' + rede + '</small>';
+  }
 
   let conn = null;              // conexão com o dono (quando você não é o dono)
   let encerrado = false;
@@ -1895,19 +1923,20 @@ function iniciarSala(op) {
   prazoEntrada = setTimeout(() => {
     if (souDono) {
       if (peerAbriu) return;
-      sair('Não consegui criar a sala.' + MSG_SERVIDOR);
+      sair('Não consegui criar a sala.' + MSG_SERVIDOR + detalhes());
     } else {
       if (entrou) return;
-      if (!peerAbriu) sair('Não consegui falar com o servidor de conexão.' + MSG_SERVIDOR);
+      if (!peerAbriu) sair('Não consegui falar com o servidor de conexão.' + MSG_SERVIDOR + detalhes());
       else sair('Não consegui entrar na sala (demorou demais).' +
         '<br><small>Confira: o dono está com a página aberta? O link tem o # com o código no final? ' +
         'Os dois estão com a mesma versão do site (veja o "v..." no canto de cima)? ' +
-        'Redes de escola/trabalho e dados móveis às vezes bloqueiam a conexão: tente outro Wi-Fi.</small>');
+        'Redes de escola/trabalho e dados móveis às vezes bloqueiam a conexão: tente outro Wi-Fi.</small>' + detalhes());
     }
   }, TEMPO_ENTRADA);
 
   peer.on('open', id => {
     peerAbriu = true;
+    passo('servidor ok');
     eu.id = id;
     if (souDono) {
       clearTimeout(prazoEntrada);
@@ -1924,9 +1953,11 @@ function iniciarSala(op) {
       return;
     }
 
-    conn = peer.connect(op.hostId);
+    conn = peer.connect(op.hostId, { reliable: true }); // canal ordenado e confiável
     conn.on('open', () => {
+      passo('canal aberto');
       conn.send({ tipo: 'oi', nome: eu.nome, foto: eu.foto, senha: op.senha || '', p: PROTOCOLO });
+      passo('oi enviado');
       function enviarStatus() {
         if (encerrado || !conn.open) return;
         conn.send({ tipo: 'status', visivel: !document.hidden });
@@ -1936,6 +1967,7 @@ function iniciarSala(op) {
     });
     conn.on('data', d => {
       if (!d) return;
+      if (!entrou) passo('recebeu ' + limpo(d.tipo));
       if (d.tipo === 'cheio') sair('A sala está cheia.');
       else if (d.tipo === 'senhaErrada') {
         try { sessionStorage.removeItem('syt-senha'); } catch (e) {}
@@ -1950,13 +1982,14 @@ function iniciarSala(op) {
       else aoReceberDoHub(d);
     });
     // se o dono fechar a sala ou cair, avisa
-    conn.on('close', () => sair('A sala foi encerrada.'));
+    conn.on('close', () => { passo('canal fechado'); sair('A sala foi encerrada.' + (entrou ? '' : detalhes())); });
   });
 
   peer.on('error', err => {
     if (encerrado || !err) return;
-    if (err.type === 'peer-unavailable') sair('Sala não encontrada. Peça um link novo pro dono.');
-    else if (err.type === 'network' || err.type === 'server-error' || err.type === 'socket-error') sair('Erro de conexão. Tente de novo.');
+    passo('erro ' + limpo(err.type));
+    if (err.type === 'peer-unavailable') sair('Sala não encontrada. Peça um link novo pro dono.' + detalhes());
+    else if (err.type === 'network' || err.type === 'server-error' || err.type === 'socket-error') sair('Erro de conexão. Tente de novo.' + detalhes());
   });
 }
 
